@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -40,9 +39,16 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ c
   );
 };
 
-export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => {
   return (
-    <div className={`bg-white rounded-2xl ios-shadow overflow-hidden ${className}`}>
+    <div 
+      className={`bg-white rounded-2xl ios-shadow overflow-hidden ${className}`}
+      {...props}
+    >
       {children}
     </div>
   );

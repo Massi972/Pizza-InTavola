@@ -2,9 +2,18 @@ import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
 
 // Safe access to Vite environment variables
-const env = (import.meta as any).env || {};
-const SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://akifadjnpedvwesxzbsw.supabase.co';
-const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFraWZhZGpucGVkdndlc3h6YnN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MTUzMTAsImV4cCI6MjA4NjM5MTMxMH0.5vHJku7L7ruZApORXxJZaEJgC39EWnApyM8vbcQNKko';
+// Using a more robust check for import.meta.env
+const getEnvVar = (name: string, fallback: string): string => {
+  try {
+    const value = (import.meta as any).env?.[name];
+    return value || fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
+const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'https://akifadjnpedvwesxzbsw.supabase.co');
+const SUPABASE_ANON_KEY = getEnvVar('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFraWZhZGpucGVkdndlc3h6YnN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MTUzMTAsImV4cCI6MjA4NjM5MTMxMH0.5vHJku7L7ruZApORXxJZaEJgC39EWnApyM8vbcQNKko');
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
