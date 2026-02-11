@@ -4,9 +4,12 @@ import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
 // Safe access to Vite environment variables
 const getEnvVar = (name: string, fallback: string): string => {
   try {
-    // Access using dynamic index to avoid TS check on import.meta if env is not defined
+    // Vite defines environment variables on import.meta.env
     const env = (import.meta as any).env;
-    return env ? env[name] || fallback : fallback;
+    if (env && env[name]) {
+      return env[name];
+    }
+    return fallback;
   } catch (e) {
     return fallback;
   }
