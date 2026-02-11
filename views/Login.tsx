@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, Role } from '../types';
 import { Button, Input, Card } from '../components/UI';
-import { PizzaIcon, Lock, UsersIcon, ChevronRight, X, Check, AlertCircle } from '../components/Icons';
+import { Lock, UsersIcon, ChevronRight, X, Check, AlertCircle } from '../components/Icons';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -121,12 +120,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
       <div className="w-full max-w-sm flex flex-col items-center gap-8">
         
-        {/* Intestazione */}
+        {/* Intestazione con nuovo logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-20 h-20 bg-[#007AFF] rounded-3xl flex items-center justify-center shadow-lg transform -rotate-3">
-            <PizzaIcon color="white" size={40} />
+          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-xl p-1 overflow-hidden">
+            {/* Assumiamo che il logo sia stato caricato come /logo.png */}
+            <img 
+              src="/logo.png" 
+              alt="Pizza InTavola Logo" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                // Fallback nel caso il logo non sia ancora disponibile
+                (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png';
+              }}
+            />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mt-4">Staff Pizza</h1>
+          <h1 className="text-3xl font-black tracking-tighter mt-4 text-[#1c1c1e]">Pizza InTavola</h1>
           <p className="text-[#8E8E93] font-medium text-center px-4">
             {mode === 'pin' ? 'Inserisci il tuo PIN personale' : 
              mode === 'reset-search' ? 'Cerca il tuo nome nella lista' :

@@ -1,5 +1,5 @@
 {
-  "name": "Pizza Staff - Ordini Interni",
-  "description": "Web app gestionale per l'ordinazione quotidiana delle pizze da parte del personale, con area admin, gestione turni e reportistica export.",
+  "name": "Pizza InTavola",
+  "description": "Web app gestionale per l'ordinazione quotidiana delle pizze per lo staff di Pizza InTavola.",
   "requestFramePermissions": []
 }
