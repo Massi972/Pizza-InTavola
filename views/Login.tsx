@@ -116,11 +116,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="w-full max-w-sm flex flex-col items-center gap-8">
         
         <div className="flex flex-col items-center gap-3">
-          <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-xl p-1 overflow-hidden">
+          <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-xl p-0.5 overflow-hidden">
             <img 
               src="/logo.png" 
               alt="Pizza InTavola Logo" 
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain scale-[1.05]"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png';
               }}
@@ -171,7 +171,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {mode === 'reset-verify' && (
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-2xl ios-shadow space-y-4">
-                <p className="text-xs font-bold text-[#8E8E93] uppercase">Inserisci Codice Locale</p>
+                <p className="text-xs font-bold text-[#8E8E93] uppercase text-center">Inserisci Codice Locale</p>
                 <Input 
                   placeholder="Es: PIZZA2025" 
                   className="text-center font-bold tracking-widest uppercase" 
