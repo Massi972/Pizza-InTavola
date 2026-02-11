@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Pizza, Order, SlotTime, DayStatus } from '../types';
 import { db } from '../services/db';
@@ -157,6 +156,14 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           </div>
         </div>
       )}
+
+      {/* Messaggio di Benvenuto */}
+      <div className="mb-6 px-1">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1c1c1e]">
+          Ciao! {user.firstName},
+        </h1>
+        <p className="text-[#8E8E93] font-medium">quale pizza mangi oggi?</p>
+      </div>
 
       {/* Ordine Esistente */}
       {myOrder && !selectedPizza && !isEditing && (
