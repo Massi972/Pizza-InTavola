@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-black;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .ios-blur {
+    @apply backdrop-blur-xl bg-white/80;
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .ios-shadow {
+    @apply shadow-[0_4px_12px_rgba(0,0,0,0.05)];
+  }
+
+  .loading-spinner {
+    @apply border-2 border-[#f3f3f3] border-t-[#007AFF] rounded-full w-4 h-4 animate-spin;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
