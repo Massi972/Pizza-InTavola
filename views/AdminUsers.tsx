@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X, Lock } from '../components/Icons';
+import { Plus, Edit2, Trash2, X, Lock, AlertCircle } from '../components/Icons';
 
 interface AdminUsersProps {
   onBack: () => void;
@@ -15,6 +14,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   const [editing, setEditing] = useState<Partial<User> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -35,12 +35,21 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   const handleSave = async () => {
     if (!editing?.firstName || !editing?.lastName || !editing?.pin) return;
     setSaving(true);
+    setError('');
     try {
+      // CONTROLLO UNICITÀ PIN
+      const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
+      if (!isAvailable) {
+        setError('Questo PIN è già in uso da un altro utente attivo!');
+        setSaving(false);
+        return;
+      }
+
       await db.saveUser(editing);
       await fetchUsers();
       setEditing(null);
     } catch (err) {
-      alert("Errore nel salvataggio. Forse il PIN è già in uso?");
+      setError("Errore nel salvataggio dei dati.");
     } finally {
       setSaving(false);
     }
@@ -57,15 +66,26 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     }
   };
 
-  const generatePin = () => {
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    setEditing({ ...editing, pin });
+  const generatePin = async () => {
+    let pin = '';
+    let isUnique = false;
+    let attempts = 0;
+    
+    // Proviamo a generare un PIN unico (max 10 tentativi per sicurezza)
+    while (!isUnique && attempts < 10) {
+      pin = Math.floor(1000 + Math.random() * 9000).toString();
+      isUnique = await db.isPinAvailable(pin, editing?.id);
+      attempts++;
+    }
+    
+    setEditing(prev => prev ? { ...prev, pin } : null);
+    setError('');
   };
 
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
       <div className="space-y-4">
-        <Button fullWidth onClick={() => setEditing({ role: Role.WORKER, pin: '' })}>
+        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true }); setError(''); }}>
           <Plus size={20} /> Aggiungi Dipendente
         </Button>
 
@@ -88,7 +108,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => setEditing(u)} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
+                    <button onClick={() => { setEditing(u); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                       <Edit2 size={16} />
                     </button>
                     <button onClick={() => handleDelete(u.id)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
@@ -114,13 +134,20 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditing(null)} />
-          <div className="relative bg-white rounded-t-[32px] p-6 space-y-4 shadow-2xl">
+          <div className="relative bg-white rounded-t-[32px] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold">{editing.id ? 'Modifica Dipendente' : 'Nuovo Dipendente'}</h2>
               <button onClick={() => setEditing(null)} className="p-2 bg-[#F2F2F7] rounded-full">
                 <X size={20} />
               </button>
             </div>
+
+            {error && (
+              <div className="bg-red-50 p-3 rounded-xl border border-red-100 flex items-center gap-2 text-[#FF3B30] text-sm font-bold">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -153,7 +180,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                   <Input 
                     placeholder="4-6 cifre"
                     value={editing.pin || ''} 
-                    onChange={e => setEditing({...editing, pin: e.target.value})} 
+                    onChange={e => { setError(''); setEditing({...editing, pin: e.target.value}); }} 
                   />
                 </div>
                 <Button variant="secondary" onClick={generatePin} className="!py-[14px]">
@@ -161,13 +188,15 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 p-1">
                 <input 
+                  id="user-active"
                   type="checkbox" 
+                  className="w-5 h-5 accent-[#007AFF]"
                   checked={editing.active ?? true} 
                   onChange={e => setEditing({...editing, active: e.target.checked})}
                 />
-                <label className="text-sm font-medium">Utente Attivo</label>
+                <label htmlFor="user-active" className="text-sm font-medium">Utente Attivo / Abilitato</label>
               </div>
             </div>
 

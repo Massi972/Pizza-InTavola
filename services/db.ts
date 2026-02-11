@@ -55,6 +55,16 @@ class DB {
     };
   }
 
+  // Verifica se un PIN è già in uso da un ALTRO utente
+  async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
+    let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
+    if (excludeUserId) {
+      query = query.neq('id', excludeUserId);
+    }
+    const { data, error } = await query.maybeSingle();
+    return !data; // Se non c'è data, il PIN è disponibile
+  }
+
   async updateUserPin(userId: string, newPin: string): Promise<void> {
     const { error } = await supabase.from('users').update({ pin: newPin }).eq('id', userId);
     if (error) throw error;

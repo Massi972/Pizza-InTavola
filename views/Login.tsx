@@ -72,7 +72,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleSetNewPin = async () => {
     if (!selectedUser || newPin.length < 4) return;
     setLoading(true);
+    setError('');
     try {
+      // CONTROLLO UNICITÀ PIN
+      const isAvailable = await db.isPinAvailable(newPin);
+      if (!isAvailable) {
+        setError('Questo PIN è già in uso da un altro dipendente. Scegline uno diverso.');
+        setNewPin('');
+        setLoading(false);
+        return;
+      }
+
       await db.updateUserPin(selectedUser.id, newPin);
       setPin(newPin);
       setMode('pin');
@@ -137,7 +147,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <div className="w-full">
           <div className="h-6 mb-4">
-            {error && <p className={`text-center text-sm font-bold ${error.includes('aggiornato') ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>{error}</p>}
+            {error && <p className={`text-center text-sm font-bold leading-tight px-4 ${error.includes('aggiornato') ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>{error}</p>}
           </div>
 
           {mode === 'pin' && (
