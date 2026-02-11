@@ -16,15 +16,33 @@ const SUPABASE_ANON_KEY = getEnvVar('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1N
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+export interface GlobalSettings {
+  master_code: string;
+  override_cutoff: boolean;
+}
+
 class DB {
+  async getSettings(): Promise<GlobalSettings> {
+    const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
+    if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false }; 
+    return {
+      master_code: data.master_code,
+      override_cutoff: !!data.override_cutoff
+    };
+  }
+
   async getMasterCode(): Promise<string> {
-    const { data, error } = await supabase.from('settings').select('master_code').eq('id', 'global').maybeSingle();
-    if (error || !data) return 'PIZZA2025'; 
-    return data.master_code;
+    const settings = await this.getSettings();
+    return settings.master_code;
   }
 
   async updateMasterCode(newCode: string): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 'global', master_code: newCode });
+    const { error } = await supabase.from('settings').upsert({ id: 'global', master_code: newCode }, { onConflict: 'id' });
+    if (error) throw error;
+  }
+
+  async updateOverrideCutoff(value: boolean): Promise<void> {
+    const { error } = await supabase.from('settings').upsert({ id: 'global', override_cutoff: value }, { onConflict: 'id' });
     if (error) throw error;
   }
 
@@ -55,14 +73,13 @@ class DB {
     };
   }
 
-  // Verifica se un PIN è già in uso da un ALTRO utente
   async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
     let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
     if (excludeUserId) {
       query = query.neq('id', excludeUserId);
     }
     const { data, error } = await query.maybeSingle();
-    return !data; // Se non c'è data, il PIN è disponibile
+    return !data;
   }
 
   async updateUserPin(userId: string, newPin: string): Promise<void> {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Day, DayStatus, SlotTime, Role } from '../types';
 import { db } from '../services/db';
@@ -14,7 +13,8 @@ import {
   Download,
   TableIcon,
   Edit2,
-  Check
+  Check,
+  AlertCircle
 } from '../components/Icons';
 import { formatDate } from '../services/utils';
 import { exportToCSV, exportToXLSX, exportToPDF } from '../services/exportService';
@@ -32,17 +32,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [actionLoading, setActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'byUser' | 'byPizza'>('byUser');
   const [masterCode, setMasterCode] = useState('');
+  const [overrideCutoff, setOverrideCutoff] = useState(false);
   const [isEditingCode, setIsEditingCode] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [day, code] = await Promise.all([
+      const [day, settings] = await Promise.all([
         db.getCurrentDay(),
-        db.getMasterCode()
+        db.getSettings()
       ]);
       setCurrentDay(day);
-      setMasterCode(code);
+      setMasterCode(settings.master_code);
+      setOverrideCutoff(settings.override_cutoff);
       
       if (day) {
         const [dayOrders, users, pizzas] = await Promise.all([
@@ -78,6 +80,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       alert("Errore salvataggio codice");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleToggleOverride = async () => {
+    if (isReadOnly) return;
+    const newValue = !overrideCutoff;
+    setOverrideCutoff(newValue);
+    try {
+      await db.updateOverrideCutoff(newValue);
+    } catch (err) {
+      alert("Errore aggiornamento override");
+      setOverrideCutoff(!newValue);
     }
   };
 
@@ -160,16 +174,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
               {currentDay ? (currentDay.status === DayStatus.OPEN ? 'APERTA' : 'CHIUSA') : 'MAI APERTA'}
             </div>
           </div>
-          <div className="flex gap-2">
-            {!currentDay || currentDay.status === DayStatus.CLOSED ? (
-              <Button onClick={handleOpenDay} className="flex-1" variant="primary" disabled={isReadOnly || actionLoading}>
-                {actionLoading ? <div className="loading-spinner border-white border-t-transparent" /> : <><Unlock size={18} /> Apri Giornata</>}
-              </Button>
-            ) : (
-              <Button onClick={handleCloseDay} className="flex-1" variant="danger" disabled={isReadOnly || actionLoading}>
-                {actionLoading ? <div className="loading-spinner border-white border-t-transparent" /> : <><Lock size={18} /> Chiudi Giornata</>}
-              </Button>
-            )}
+          
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              {!currentDay || currentDay.status === DayStatus.CLOSED ? (
+                <Button onClick={handleOpenDay} className="flex-1" variant="primary" disabled={isReadOnly || actionLoading}>
+                  {actionLoading ? <div className="loading-spinner border-white border-t-transparent" /> : <><Unlock size={18} /> Apri Giornata</>}
+                </Button>
+              ) : (
+                <Button onClick={handleCloseDay} className="flex-1" variant="danger" disabled={isReadOnly || actionLoading}>
+                  {actionLoading ? <div className="loading-spinner border-white border-t-transparent" /> : <><Lock size={18} /> Chiudi Giornata</>}
+                </Button>
+              )}
+            </div>
+
+            {/* TOGGLE OVERRIDE ORARIO (TEST MODE) */}
+            <div className="flex items-center justify-between p-3 bg-[#F2F2F7] rounded-xl">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} className={overrideCutoff ? 'text-[#FF9500]' : 'text-[#8E8E93]'} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold leading-none">Override Orario (Test)</span>
+                  <span className="text-[10px] text-[#8E8E93]">Permetti ordini oltre le 16:30</span>
+                </div>
+              </div>
+              <button 
+                onClick={handleToggleOverride}
+                disabled={isReadOnly}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${overrideCutoff ? 'bg-[#34C759]' : 'bg-[#C6C6C8]'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${overrideCutoff ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
           </div>
         </Card>
 

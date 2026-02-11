@@ -33,14 +33,21 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   }, []);
 
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin) return;
+    if (!editing?.firstName || !editing?.lastName || !editing?.pin) {
+      setError('Compila tutti i campi obbligatori');
+      return;
+    }
+    
     setSaving(true);
     setError('');
+    
     try {
       // CONTROLLO UNICITÀ PIN
+      // Escludiamo l'utente corrente dalla ricerca se stiamo modificando (per permettergli di mantenere il proprio PIN)
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
+      
       if (!isAvailable) {
-        setError('Questo PIN è già in uso da un altro utente attivo!');
+        setError('Questo PIN è già in uso');
         setSaving(false);
         return;
       }
@@ -134,7 +141,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditing(null)} />
-          <div className="relative bg-white rounded-t-[32px] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-t-[32px] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold">{editing.id ? 'Modifica Dipendente' : 'Nuovo Dipendente'}</h2>
               <button onClick={() => setEditing(null)} className="p-2 bg-[#F2F2F7] rounded-full">
@@ -143,8 +150,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
             </div>
 
             {error && (
-              <div className="bg-red-50 p-3 rounded-xl border border-red-100 flex items-center gap-2 text-[#FF3B30] text-sm font-bold">
-                <AlertCircle size={18} />
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-center gap-3 text-[#FF3B30] text-sm font-bold animate-in fade-in zoom-in-95 duration-200">
+                <AlertCircle size={20} />
                 {error}
               </div>
             )}
@@ -153,11 +160,11 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Nome</label>
-                  <Input value={editing.firstName || ''} onChange={e => setEditing({...editing, firstName: e.target.value})} />
+                  <Input value={editing.firstName || ''} onChange={e => { setError(''); setEditing({...editing, firstName: e.target.value}); }} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Cognome</label>
-                  <Input value={editing.lastName || ''} onChange={e => setEditing({...editing, lastName: e.target.value})} />
+                  <Input value={editing.lastName || ''} onChange={e => { setError(''); setEditing({...editing, lastName: e.target.value}); }} />
                 </div>
               </div>
               
@@ -200,7 +207,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
               </div>
             </div>
 
-            <Button fullWidth onClick={handleSave} disabled={saving}>
+            <Button fullWidth onClick={handleSave} disabled={saving || !editing.pin}>
               {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva Dipendente'}
             </Button>
           </div>

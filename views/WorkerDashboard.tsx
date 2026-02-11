@@ -15,6 +15,7 @@ interface WorkerDashboardProps {
 const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => {
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [currentDay, setCurrentDay] = useState<any>(null);
+  const [overrideActive, setOverrideActive] = useState(false);
   const [myOrder, setMyOrder] = useState<Order | null>(null);
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
@@ -26,21 +27,26 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   const canOrder = useMemo(() => {
-    return currentDay?.status === DayStatus.OPEN && isBeforeCutoff();
-  }, [currentDay]);
+    if (!currentDay || currentDay.status !== DayStatus.OPEN) return false;
+    // Se l'admin ha attivato l'override, permettiamo sempre se il giorno è OPEN
+    if (overrideActive) return true;
+    return isBeforeCutoff();
+  }, [currentDay, overrideActive]);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [pizzaList, day, order] = await Promise.all([
+        const [pizzaList, day, order, settings] = await Promise.all([
           db.getPizzas(),
           db.getCurrentDay(),
-          db.getUserOrderToday(user.id)
+          db.getUserOrderToday(user.id),
+          db.getSettings()
         ]);
         setPizzas(pizzaList.filter(p => p.active));
         setCurrentDay(day);
         setMyOrder(order);
+        setOverrideActive(settings.override_cutoff);
       } catch (err) {
         setMessage({ text: "Errore nel caricamento dei dati", type: "error" });
       } finally {
@@ -81,10 +87,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
       setNote('');
       setIsEditing(false);
       
-      // Messaggio di successo personalizzato come richiesto
       setMessage({ text: "Ordine Confermato ed inviato", type: "success" });
-      
-      // Auto-dismiss dopo 3 secondi
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       setMessage({ text: "Errore durante il salvataggio", type: "error" });
@@ -117,7 +120,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
   return (
     <Layout title="Ordina Pizza" onLogout={onLogout}>
-      {/* Toast / Banner Messaggio di Successo/Errore stile iOS */}
       {message && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm p-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all transform animate-in fade-in slide-in-from-top-10 duration-500 ease-out ${
           message.type === 'success' ? 'bg-[#34C759] text-white' : 'bg-[#FF3B30] text-white'
@@ -148,11 +150,13 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           </div>
         </div>
       ) : (
-        <div className="bg-[#34C759] text-white p-4 rounded-2xl mb-6 flex items-center gap-3">
-          <Check size={24} />
+        <div className={`${overrideActive ? 'bg-[#5856D6]' : 'bg-[#34C759]'} text-white p-4 rounded-2xl mb-6 flex items-center gap-3`}>
+          {overrideActive ? <AlertCircle size={24} /> : <Check size={24} />}
           <div>
-            <p className="font-bold">Ordini Aperti</p>
-            <p className="text-xs opacity-90">Puoi ordinare o modificare fino alle 16:30.</p>
+            <p className="font-bold">Ordini Aperti {overrideActive && '(Test Mode)'}</p>
+            <p className="text-xs opacity-90">
+              {overrideActive ? "Accesso consentito forzatamente dall'amministratore." : "Puoi ordinare o modificare fino alle 16:30."}
+            </p>
           </div>
         </div>
       )}
@@ -167,10 +171,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
       {/* Ordine Esistente */}
       {myOrder && !selectedPizza && !isEditing && (
-        <Card className="p-4 mb-6 border-2 border-[#34C759]">
+        <Card className={`p-4 mb-6 border-2 ${overrideActive ? 'border-[#5856D6]' : 'border-[#34C759]'}`}>
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-xs font-bold text-[#34C759] uppercase mb-1">Il tuo ordine di oggi</p>
+              <p className={`text-xs font-bold ${overrideActive ? 'text-[#5856D6]' : 'text-[#34C759]'} uppercase mb-1`}>Il tuo ordine di oggi</p>
               <h2 className="text-xl font-bold">
                 {pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza non disponibile'}
               </h2>
