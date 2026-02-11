@@ -2,11 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
 
 // Safe access to Vite environment variables
-// Using a more robust check for import.meta.env
 const getEnvVar = (name: string, fallback: string): string => {
   try {
-    const value = (import.meta as any).env?.[name];
-    return value || fallback;
+    // Access using dynamic index to avoid TS check on import.meta if env is not defined
+    const env = (import.meta as any).env;
+    return env ? env[name] || fallback : fallback;
   } catch (e) {
     return fallback;
   }
