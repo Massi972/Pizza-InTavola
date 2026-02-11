@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../services/db';
 import { User, Role } from '../types';
 import { Button, Input, Card } from '../components/UI';
-import { Lock, UsersIcon, ChevronRight, X, Check, AlertCircle } from '../components/Icons';
+import { ChevronRight, X } from '../components/Icons';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -14,15 +14,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'pin' | 'reset-search' | 'reset-verify' | 'reset-new-pin'>('pin');
   
-  // Per il reset
   const [workerUsers, setWorkerUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [masterCodeInput, setMasterCodeInput] = useState('');
   const [newPin, setNewPin] = useState('');
 
-  const handleLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleLogin = async () => {
     if (pin.length < 4) return;
     setLoading(true);
     setError('');
@@ -45,7 +43,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     try {
       const users = await db.getUsers();
-      // Filtriamo per mostrare SOLO i Worker attivi. Admin e Supervisor sono esclusi dalla ricerca self-service.
       const onlyWorkers = users.filter(u => u.active && u.role === Role.WORKER);
       setWorkerUsers(onlyWorkers);
       setMode('reset-search');
@@ -80,7 +77,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setPin(newPin);
       setMode('pin');
       setError('PIN aggiornato! Ora puoi entrare.');
-      // Reset dei campi reset
       setNewPin('');
       setMasterCodeInput('');
       setSelectedUser(null);
@@ -95,7 +91,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     `${u.firstName} ${u.lastName}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Render Tastierino Numerico
   const renderNumpad = (value: string, setValue: (v: string) => void, onConfirm: () => void, maxLength = 6) => (
     <div className="w-full">
       <div className="flex justify-center gap-4 mb-8">
@@ -120,16 +115,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
       <div className="w-full max-w-sm flex flex-col items-center gap-8">
         
-        {/* Intestazione con nuovo logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-xl p-1 overflow-hidden">
-            {/* Assumiamo che il logo sia stato caricato come /logo.png */}
+          <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-xl p-1 overflow-hidden">
             <img 
               src="/logo.png" 
               alt="Pizza InTavola Logo" 
               className="w-full h-full object-contain"
               onError={(e) => {
-                // Fallback nel caso il logo non sia ancora disponibile
                 (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png';
               }}
             />
@@ -143,7 +135,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </p>
         </div>
 
-        {/* Corpo Variabile */}
         <div className="w-full">
           <div className="h-6 mb-4">
             {error && <p className={`text-center text-sm font-bold ${error.includes('aggiornato') ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>{error}</p>}
@@ -180,7 +171,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {mode === 'reset-verify' && (
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-2xl ios-shadow space-y-4">
-                <p className="text-xs font-bold text-[#8E8E93] uppercase">Inserisci Codice Locale (quello in bacheca)</p>
+                <p className="text-xs font-bold text-[#8E8E93] uppercase">Inserisci Codice Locale</p>
                 <Input 
                   placeholder="Es: PIZZA2025" 
                   className="text-center font-bold tracking-widest uppercase" 

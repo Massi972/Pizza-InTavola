@@ -39,10 +39,13 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ c
   );
 };
 
+// FIX: Estendiamo correttamente React.HTMLAttributes per includere className, onClick e altri attributi standard
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
+// FIX: Convertiamo Card in React.FC per gestire correttamente i prop speciali di React come 'key'
+// e assicurare che 'className' sia riconosciuto correttamente durante la destrutturazione.
 export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => {
   return (
     <div 
@@ -64,6 +67,7 @@ export const SegmentedControl: React.FC<{
       {options.map((option) => (
         <button
           key={option}
+          type="button"
           onClick={() => onChange(option)}
           className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
             selected === option 
