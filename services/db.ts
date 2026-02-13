@@ -227,8 +227,8 @@ class DB {
       id: o.id, 
       dayId: o.day_id, 
       userId: o.user_id, 
-      pizza_id: o.pizza_id, 
-      slot_time: o.slot_time as SlotTime, 
+      pizzaId: o.pizza_id, 
+      slotTime: o.slot_time as SlotTime, 
       note: o.note, 
       createdAt: o.created_at, 
       updatedAt: o.updated_at 
