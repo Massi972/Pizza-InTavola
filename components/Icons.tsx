@@ -25,7 +25,9 @@ import {
   MessageCircle,
   RefreshCw,
   Key,
-  Fingerprint
+  Fingerprint,
+  Settings,
+  User as UserIcon
 } from 'lucide-react';
 
 export {
@@ -53,5 +55,7 @@ export {
   MessageCircle,
   RefreshCw,
   Key,
-  Fingerprint
+  Fingerprint,
+  Settings,
+  UserIcon
 };

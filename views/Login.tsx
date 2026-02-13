@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User } from '../types';
-import { Button, Card } from '../components/UI';
 import { Fingerprint } from '../components/Icons';
+import { isBiometricAvailable, verifyBiometrics } from '../services/biometrics';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -13,25 +13,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
-  const [hasStoredBiometrics, setHasStoredBiometrics] = useState(false);
+  const [isBioSupported, setIsBioSupported] = useState(false);
+  const [hasStoredPin, setHasStoredPin] = useState(false);
 
   useEffect(() => {
-    const checkBiometrics = async () => {
-      const supported = !!(window.PublicKeyCredential && 
-        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
-      setIsBiometricSupported(supported);
+    const checkBio = async () => {
+      const available = await isBiometricAvailable();
+      setIsBioSupported(available);
       
-      const stored = localStorage.getItem('pizzastaff_biometric_enabled') === 'true';
-      const storedPin = localStorage.getItem('pizzastaff_stored_pin');
-      setHasStoredBiometrics(stored && !!storedPin);
+      const enabled = localStorage.getItem('pizzastaff_biometric_enabled') === 'true';
+      const stored = localStorage.getItem('pizzastaff_stored_pin');
+      setHasStoredPin(enabled && !!stored);
 
-      // Se supportato e già configurato, proviamo l'accesso automatico dopo un breve delay
-      if (stored && storedPin) {
-        setTimeout(() => handleBiometricLogin(storedPin), 500);
+      // Prova il login automatico se configurato
+      if (enabled && stored) {
+        handleBiometricLogin(stored);
       }
     };
-    checkBiometrics();
+    checkBio();
   }, []);
 
   const handleBiometricLogin = async (storedPin?: string) => {
@@ -39,15 +38,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     if (!pinToUse) return;
 
     try {
-      // In un'app reale useremmo navigator.credentials.get() per una vera sfida FIDO2.
-      // Qui simuliamo l'autenticazione del dispositivo.
-      setLoading(true);
-      const user = await db.getUserByPin(pinToUse);
-      if (user) {
-        onLogin(user);
-      } else {
-        localStorage.removeItem('pizzastaff_stored_pin');
-        setHasStoredBiometrics(false);
+      const verified = await verifyBiometrics("current_user"); // WebAuthn trigger reale
+      if (verified) {
+        setLoading(true);
+        const user = await db.getUserByPin(pinToUse);
+        if (user) {
+          onLogin(user);
+        } else {
+          localStorage.removeItem('pizzastaff_stored_pin');
+          setHasStoredPin(false);
+        }
       }
     } catch (err) {
       console.error("Biometric error", err);
@@ -75,54 +75,96 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
+  const addDigit = (d: string) => {
+    if (pin.length < 6) {
+      const newPin = pin + d;
+      setPin(newPin);
+      setError('');
+      if (newPin.length >= 4) {
+        // Opzionale: invio automatico al raggiungimento di 4 cifre
+      }
+    }
+  };
+
   const renderNumpad = () => (
-    <div className="w-full">
-      <div className="flex justify-center gap-4 mb-8">
+    <div className="w-full max-w-[280px]">
+      <div className="flex justify-center gap-4 mb-10">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all ${pin.length > i ? 'bg-[#007AFF] border-[#007AFF] scale-110' : 'bg-transparent border-[#C6C6C8]'}`} />
+          <div 
+            key={i} 
+            className={`w-3 h-3 rounded-full border-2 transition-all duration-200 ${
+              pin.length > i ? 'bg-[#007AFF] border-[#007AFF] scale-125' : 'bg-transparent border-[#C6C6C8]'
+            }`} 
+          />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-y-4 gap-x-6">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
-          <button key={d} onClick={() => { if(pin.length < 6) setPin(pin + d); setError(''); }} className="h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA]">{d}</button>
+          <button 
+            key={d} 
+            onClick={() => addDigit(d)} 
+            className="w-16 h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA] transition-colors flex items-center justify-center mx-auto"
+          >
+            {d}
+          </button>
         ))}
         
-        {/* Pulsante Biometria */}
         <button 
-          onClick={() => isBiometricSupported ? handleBiometricLogin() : alert("La biometria non è abilitata o supportata su questo dispositivo.")}
-          className={`h-16 rounded-full flex items-center justify-center transition-all ${hasStoredBiometrics ? 'text-[#007AFF] bg-white ios-shadow active:bg-[#E5E5EA]' : 'text-[#8E8E93] opacity-30'}`}
+          onClick={() => handleBiometricLogin()}
+          className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto transition-all ${
+            hasStoredPin ? 'text-[#007AFF] bg-white ios-shadow active:bg-[#E5E5EA]' : 'text-[#8E8E93] opacity-20'
+          }`}
+          disabled={!hasStoredPin}
         >
           <Fingerprint size={32} />
         </button>
 
-        <button onClick={() => { if(pin.length < 6) setPin(pin + '0'); setError(''); }} className="h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA]">0</button>
+        <button 
+          onClick={() => addDigit('0')} 
+          className="w-16 h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA] flex items-center justify-center mx-auto"
+        >
+          0
+        </button>
         
-        <button onClick={handleLogin} disabled={pin.length < 4 || loading} className="h-16 rounded-full bg-[#007AFF] text-white text-sm font-bold shadow-md flex items-center justify-center">
-          {loading ? <div className="loading-spinner border-white border-t-transparent" /> : 'OK'}
+        <button 
+          onClick={handleLogin} 
+          disabled={pin.length < 4 || loading} 
+          className="w-16 h-16 rounded-full bg-[#007AFF] text-white text-sm font-black shadow-lg flex items-center justify-center mx-auto active:scale-95 disabled:opacity-50 transition-all"
+        >
+          {loading ? <div className="loading-spinner border-white border-t-transparent" /> : 'ENTRA'}
         </button>
       </div>
-      <button onClick={() => setPin('')} className="w-full mt-4 h-10 text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest">
-        Cancella PIN
+      <button 
+        onClick={() => setPin('')} 
+        className="w-full mt-8 text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]"
+      >
+        Cancella
       </button>
     </div>
   );
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
-      <div className="w-full max-sm flex flex-col items-center gap-8">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-24 h-24 bg-white rounded-[24px] flex items-center justify-center shadow-xl p-0.5 overflow-hidden">
-             <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" onError={e => (e.target as any).src = 'https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png'} />
+      <div className="w-full max-w-xs flex flex-col items-center gap-10">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-24 h-24 bg-white rounded-[28px] flex items-center justify-center shadow-2xl p-4">
+             <img 
+               src="https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png" 
+               alt="Logo" 
+               className="w-full h-full object-contain opacity-80" 
+             />
           </div>
-          <h1 className="text-2xl font-black tracking-tight mt-4">Pizza InTavola</h1>
-          <p className="text-[#8E8E93] text-sm font-medium">Benvenuto, inserisci il tuo PIN</p>
+          <div className="text-center">
+            <h1 className="text-2xl font-black tracking-tight">Staff InTavola</h1>
+            <p className="text-[#8E8E93] text-xs font-bold uppercase tracking-widest mt-1">Area Dipendenti</p>
+          </div>
         </div>
 
-        <div className="w-full">
-          {error && <p className="text-center text-sm font-bold mb-4 text-[#FF3B30]">{error}</p>}
+        <div className="w-full flex flex-col items-center">
+          {error && <p className="text-center text-sm font-bold mb-6 text-[#FF3B30] animate-bounce">{error}</p>}
           {renderNumpad()}
-          <p className="text-center mt-10 text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest max-w-[240px] mx-auto leading-relaxed">
-            Se è la tua prima volta o hai perso il PIN, contatta l'amministrazione.
+          <p className="text-center mt-12 text-[9px] font-bold text-[#C6C6C8] uppercase tracking-[0.1em] max-w-[200px] leading-relaxed">
+            In caso di smarrimento del PIN rivolgersi al responsabile.
           </p>
         </div>
       </div>
