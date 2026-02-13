@@ -2,7 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
 
-// Accesso sicuro alle variabili d'ambiente Vite
 const getEnvVar = (name: string, fallback: string): string => {
   try {
     const env = (import.meta as any).env;
@@ -20,16 +19,23 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export interface GlobalSettings {
   master_code: string;
   override_cutoff: boolean;
+  manager_phone?: string; // Numero a cui i dipendenti chiedono aiuto
 }
 
 class DB {
   async getSettings(): Promise<GlobalSettings> {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-    if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false }; 
+    if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' }; 
     return {
       master_code: data.master_code,
-      override_cutoff: !!data.override_cutoff
+      override_cutoff: !!data.override_cutoff,
+      manager_phone: data.manager_phone || ''
     };
+  }
+
+  async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
+    const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
+    if (error) throw error;
   }
 
   async getMasterCode(): Promise<string> {
@@ -38,13 +44,11 @@ class DB {
   }
 
   async updateMasterCode(newCode: string): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 'global', master_code: newCode }, { onConflict: 'id' });
-    if (error) throw error;
+    await this.updateSettings({ master_code: newCode });
   }
 
   async updateOverrideCutoff(value: boolean): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 'global', override_cutoff: value }, { onConflict: 'id' });
-    if (error) throw error;
+    await this.updateSettings({ override_cutoff: value });
   }
 
   async getUsers(): Promise<User[]> {
@@ -55,6 +59,7 @@ class DB {
       firstName: u.first_name, 
       lastName: u.last_name, 
       email: u.email || '', 
+      phone: u.phone || '',
       pin: u.pin, 
       role: u.role, 
       active: u.active 
@@ -70,6 +75,7 @@ class DB {
       firstName: data.first_name, 
       lastName: data.last_name, 
       email: data.email || '',
+      phone: data.phone || '',
       pin: data.pin, 
       role: data.role, 
       active: data.active 
@@ -78,17 +84,9 @@ class DB {
 
   async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
     let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
-    if (excludeUserId) {
-      query = query.neq('id', excludeUserId);
-    }
+    if (excludeUserId) query = query.neq('id', excludeUserId);
     const { data, error } = await query.maybeSingle();
-    if (error) {
-      console.error("Errore verifica PIN:", error);
-      // In caso di errore di schema, permettiamo il proseguimento per non bloccare la UI, 
-      // ma il saveUser successivo fallirà mostrando l'errore reale.
-      return true; 
-    }
-    return !data;
+    return error ? true : !data;
   }
 
   async updateUserPin(userId: string, newPin: string): Promise<void> {
@@ -100,7 +98,8 @@ class DB {
     const payload = { 
       first_name: user.firstName, 
       last_name: user.lastName, 
-      email: user.email?.toLowerCase().trim(), // Normalizzazione email
+      email: user.email?.toLowerCase().trim(), 
+      phone: user.phone?.replace(/\s/g, ''), // Rimuove spazi dal numero
       pin: user.pin, 
       role: user.role, 
       active: user.active 
@@ -120,11 +119,17 @@ class DB {
     if (error) throw error;
   }
 
-  async recoverPin(email: string): Promise<void> {
-    const { error } = await supabase.functions.invoke('recover-pin', {
-      body: { email: email.toLowerCase().trim() }
-    });
-    if (error && error.message.includes('Failed to fetch')) throw error;
+  // Il recupero email lo manteniamo come fallback ma puntiamo su WhatsApp
+  async recoverPin(email: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const { error } = await supabase.functions.invoke('recover-pin', {
+        body: { email: email.toLowerCase().trim() }
+      });
+      if (error) return { success: false, message: 'Servizio email non disponibile.' };
+      return { success: true };
+    } catch (err) {
+      return { success: false };
+    }
   }
 
   async getPizzas(): Promise<Pizza[]> {
@@ -222,8 +227,8 @@ class DB {
       id: o.id, 
       dayId: o.day_id, 
       userId: o.user_id, 
-      pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime, 
+      pizza_id: o.pizza_id, 
+      slot_time: o.slot_time as SlotTime, 
       note: o.note, 
       createdAt: o.created_at, 
       updatedAt: o.updated_at 

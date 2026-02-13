@@ -35,8 +35,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   }, []);
 
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.email) {
-      setError('Compila tutti i campi obbligatori (Email inclusa)');
+    if (!editing?.firstName || !editing?.lastName || !editing?.pin) {
+      setError('Nome, Cognome e PIN sono obbligatori');
       return;
     }
     
@@ -46,7 +46,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     
     try {
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
-      
       if (!isAvailable) {
         setError('Questo PIN è già in uso');
         setSaving(false);
@@ -59,48 +58,40 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     } catch (err: any) {
       const msg = err.message || "";
       setError(msg);
-      
-      // Se l'errore indica che la colonna email non esiste
-      if (msg.toLowerCase().includes('column "email"') || msg.includes('schema cache')) {
+      if (msg.toLowerCase().includes('column "phone"') || msg.includes('schema cache')) {
         setShowSqlHint(true);
       }
-      
-      console.error("Dettaglio Errore Database:", err);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Eliminare questo dipendente?")) {
-      try {
-        await db.deleteUser(id);
-        await fetchUsers();
-      } catch (err) {
-        alert("Errore nella cancellazione");
-      }
+  const sendPinViaWhatsApp = (user: User) => {
+    if (!user.phone) {
+      alert("Nessun numero di telefono salvato per questo dipendente");
+      return;
     }
+    const message = `Ciao ${user.firstName}, il tuo PIN personale per ordinare la pizza su Pizza InTavola è: *${user.pin}* 🍕`;
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/${user.phone}?text=${encoded}`, '_blank');
   };
 
   const generatePin = async () => {
     let pin = '';
     let isUnique = false;
     let attempts = 0;
-    
     while (!isUnique && attempts < 10) {
       pin = Math.floor(1000 + Math.random() * 9000).toString();
       isUnique = await db.isPinAvailable(pin, editing?.id);
       attempts++;
     }
-    
     setEditing(prev => prev ? { ...prev, pin } : null);
-    setError('');
   };
 
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
       <div className="space-y-4">
-        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '' }); setError(''); setShowSqlHint(false); }}>
+        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '', phone: '' }); setError(''); setShowSqlHint(false); }}>
           <Plus size={20} /> Aggiungi Dipendente
         </Button>
 
@@ -126,22 +117,29 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                     <button onClick={() => { setEditing(u); setError(''); setShowSqlHint(false); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(u.id)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
+                    <button onClick={() => db.deleteUser(u.id).then(fetchUsers)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
                       <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-[#F2F2F7] space-y-2">
-                   <div className="flex justify-between items-center">
+                <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex justify-between items-center">
+                  <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 text-[#8E8E93]">
                       <Lock size={12} />
                       <span className="text-xs font-mono font-bold tracking-widest">{u.pin}</span>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {u.active ? 'ATTIVO' : 'SOSPESO'}
-                    </span>
+                    {u.phone && (
+                      <button 
+                        onClick={() => sendPinViaWhatsApp(u)}
+                        className="flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm active:scale-95"
+                      >
+                        Invia PIN WhatsApp
+                      </button>
+                    )}
                   </div>
-                  <p className="text-[10px] text-[#8E8E93] font-medium break-all">{u.email || 'Nessuna email salvata'}</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {u.active ? 'ATTIVO' : 'SOSPESO'}
+                  </span>
                 </div>
               </Card>
             ))}
@@ -169,9 +167,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 {showSqlHint && (
                   <div className="mt-2 p-3 bg-white/50 rounded-lg border border-red-200">
                     <p className="text-[11px] font-bold uppercase text-red-800 mb-1">Soluzione Database:</p>
-                    <p className="text-[10px] mb-2">Devi aggiungere la colonna email su Supabase SQL Editor:</p>
                     <code className="block bg-black text-white p-2 rounded text-[10px] font-mono break-all">
-                      ALTER TABLE users ADD COLUMN email TEXT;
+                      ALTER TABLE users ADD COLUMN phone TEXT;
                     </code>
                   </div>
                 )}
@@ -191,12 +188,11 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
               </div>
               
               <div>
-                <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Email Personale (per recupero PIN)</label>
+                <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (con prefisso, es: 39333...)</label>
                 <Input 
-                  type="email"
-                  placeholder="email@esempio.it"
-                  value={editing.email || ''} 
-                  onChange={e => { setError(''); setEditing({...editing, email: e.target.value}); }} 
+                  placeholder="393330000000"
+                  value={editing.phone || ''} 
+                  onChange={e => { setError(''); setEditing({...editing, phone: e.target.value}); }} 
                 />
               </div>
 
@@ -235,7 +231,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                   checked={editing.active ?? true} 
                   onChange={e => setEditing({...editing, active: e.target.checked})}
                 />
-                <label htmlFor="user-active" className="text-sm font-medium">Utente Attivo / Abilitato</label>
+                <label htmlFor="user-active" className="text-sm font-medium">Utente Attivo</label>
               </div>
             </div>
 

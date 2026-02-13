@@ -11,7 +11,8 @@ export interface User {
   id: string;
   firstName: string;
   lastName: string;
-  email: string; // Nuova proprietà
+  email: string;
+  phone: string; // Nuovo campo per WhatsApp
   pin: string;
   role: Role;
   active: boolean;
