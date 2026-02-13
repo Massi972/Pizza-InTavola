@@ -67,8 +67,8 @@ export const INITIAL_USERS: User[] = [
     lastName: 'Rossi',
     // Added missing email property
     email: 'mario.rossi@example.com',
-    // Fix: Added missing phone property required by User interface
-    phone: '393330000001',
+    // Fix: Use phone_e164 instead of phone to match User interface
+    phone_e164: '+393330000001',
     pin: '1234',
     role: Role.ADMIN,
     active: true
@@ -79,8 +79,8 @@ export const INITIAL_USERS: User[] = [
     lastName: 'Verdi',
     // Added missing email property
     email: 'luigi.verdi@example.com',
-    // Fix: Added missing phone property required by User interface
-    phone: '393330000002',
+    // Fix: Use phone_e164 instead of phone to match User interface
+    phone_e164: '+393330000002',
     pin: '1111',
     role: Role.SUPERVISOR,
     active: true
@@ -91,8 +91,8 @@ export const INITIAL_USERS: User[] = [
     lastName: 'Bianchi',
     // Added missing email property
     email: 'anna.bianchi@example.com',
-    // Fix: Added missing phone property required by User interface
-    phone: '393330000003',
+    // Fix: Use phone_e164 instead of phone to match User interface
+    phone_e164: '+393330000003',
     pin: '0000',
     role: Role.WORKER,
     active: true

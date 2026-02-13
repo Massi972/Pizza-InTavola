@@ -11,9 +11,8 @@ export interface User {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string; 
-  phone_e164?: string; // Formato internazionale per WhatsApp
+  email?: string;
+  phone_e164: string; // Formato internazionale obbligatorio es. +39...
   pin: string;
   role: Role;
   active: boolean;

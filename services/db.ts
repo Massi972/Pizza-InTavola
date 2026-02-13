@@ -51,8 +51,7 @@ class DB {
       firstName: u.first_name, 
       lastName: u.last_name, 
       email: u.email || '', 
-      phone: u.phone || '',
-      phone_e164: u.phone_e164 || u.phone || '',
+      phone_e164: u.phone_e164 || '',
       pin: u.pin, 
       role: u.role, 
       active: u.active 
@@ -68,8 +67,7 @@ class DB {
       firstName: data.first_name, 
       lastName: data.last_name, 
       email: data.email || '',
-      phone: data.phone || '',
-      phone_e164: data.phone_e164 || data.phone || '',
+      phone_e164: data.phone_e164 || '',
       pin: data.pin, 
       role: data.role, 
       active: data.active 
@@ -83,17 +81,11 @@ class DB {
     return error ? true : !data;
   }
 
-  async updateUserPin(userId: string, newPin: string): Promise<void> {
-    const { error } = await supabase.from('users').update({ pin: newPin }).eq('id', userId);
-    if (error) throw error;
-  }
-
   async saveUser(user: Partial<User>): Promise<void> {
     const payload = { 
       first_name: user.firstName, 
       last_name: user.lastName, 
       email: user.email?.toLowerCase().trim(), 
-      phone: user.phone?.replace(/\s/g, ''),
       phone_e164: user.phone_e164?.replace(/\s/g, ''),
       pin: user.pin, 
       role: user.role, 
