@@ -24,7 +24,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
     
-    // Controlla se supporta biometria e se non è già attiva
     const checkSupport = async () => {
       const supported = !!(window.PublicKeyCredential && 
         await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
@@ -36,9 +35,10 @@ const App: React.FC = () => {
   const handleLogin = (user: User) => {
     setAuth({ user, isAuthenticated: true });
     
-    // Verifica se chiedere l'attivazione della biometria
     const biometricEnabled = localStorage.getItem('pizzastaff_biometric_enabled') === 'true';
-    if (!biometricEnabled && window.PublicKeyCredential) {
+    const hasDeclined = localStorage.getItem('pizzastaff_biometric_declined') === 'true';
+
+    if (!biometricEnabled && !hasDeclined && window.PublicKeyCredential) {
       setTimeout(() => setShowBiometricPrompt(true), 1500);
     }
   };
@@ -46,15 +46,20 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setAuth({ user: null, isAuthenticated: false });
     setView('dashboard');
-    // Non cancelliamo le impostazioni biometriche al logout per permettere il ri-accesso rapido
   };
 
   const enableBiometrics = () => {
     if (auth.user?.pin) {
       localStorage.setItem('pizzastaff_stored_pin', auth.user.pin);
       localStorage.setItem('pizzastaff_biometric_enabled', 'true');
+      localStorage.removeItem('pizzastaff_biometric_declined');
       setShowBiometricPrompt(false);
     }
+  };
+
+  const declineBiometrics = () => {
+    localStorage.setItem('pizzastaff_biometric_declined', 'true');
+    setShowBiometricPrompt(false);
   };
 
   if (!auth.isAuthenticated || !auth.user) {
@@ -63,7 +68,6 @@ const App: React.FC = () => {
 
   return (
     <div className="bg-[#F2F2F7] min-h-screen">
-      {/* View Rendering */}
       {auth.user?.role === Role.ADMIN || auth.user?.role === Role.SUPERVISOR ? (
         <>
           {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
@@ -75,10 +79,9 @@ const App: React.FC = () => {
         <WorkerDashboard user={auth.user!} onLogout={handleLogout} />
       )}
 
-      {/* Popup Attivazione Biometria iOS Style */}
       {showBiometricPrompt && isBiometricSupported && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowBiometricPrompt(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={declineBiometrics} />
           <div className="relative bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in slide-in-from-bottom duration-500 text-center space-y-6">
             <div className="w-20 h-20 bg-[#F2F2F7] text-[#007AFF] rounded-full flex items-center justify-center mx-auto">
               <Fingerprint size={40} />
@@ -92,7 +95,7 @@ const App: React.FC = () => {
             <div className="space-y-3">
               <Button fullWidth onClick={enableBiometrics}>Attiva Ora</Button>
               <button 
-                onClick={() => setShowBiometricPrompt(false)}
+                onClick={declineBiometrics}
                 className="w-full py-2 text-sm font-bold text-[#8E8E93] uppercase tracking-widest"
               >
                 Magari più tardi
