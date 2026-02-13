@@ -52,8 +52,8 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
         ...o,
         user: users.find(u => u.id === o.userId),
         pizza: pizzas.find(p => p.id === o.pizzaId),
-        addMod: modifications.find(m => m.id === o.addModificationId),
-        removeMod: modifications.find(m => m.id === o.removeModificationId)
+        addMods: (o.addModificationIds || []).map((id: string) => modifications.find(m => m.id === id)).filter(Boolean),
+        removeMods: (o.removeModificationIds || []).map((id: string) => modifications.find(m => m.id === id)).filter(Boolean)
       })));
     } catch (err) {
       console.error(err);
@@ -105,18 +105,21 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
               {orders.map(o => (
                 <Card key={o.id} className="p-3">
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="flex-1">
                       <p className="font-bold text-sm">{o.user?.firstName} {o.user?.lastName}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1 mt-1">
                          <p className="text-xs text-[#007AFF] font-bold">{o.pizza?.name || 'Pizza eliminata'}</p>
-                         <div className="flex gap-1">
-                           {o.addMod && <span className="text-[9px] font-black text-green-600 bg-green-50 px-1 rounded">+{o.addMod.name}</span>}
-                           {o.removeMod && <span className="text-[9px] font-black text-red-500 bg-red-50 px-1 rounded">-{o.removeMod.name}</span>}
+                         <div className="flex flex-wrap gap-1">
+                           {o.addMods?.map((m: Modification) => (
+                             <span key={m.id} className="text-[8px] font-black text-green-600 bg-green-50 px-1 rounded">+{m.name}</span>
+                           ))}
+                           {o.removeMods?.map((m: Modification) => (
+                             <span key={m.id} className="text-[8px] font-black text-red-500 bg-red-50 px-1 rounded">-{m.name}</span>
+                           ))}
                          </div>
                       </div>
-                      {o.note && <p className="text-[10px] italic text-[#8E8E93] mt-1">"{o.note}"</p>}
                     </div>
-                    <div className="text-[10px] font-bold bg-[#F2F2F7] px-2 py-0.5 rounded">
+                    <div className="text-[10px] font-bold bg-[#F2F2F7] px-2 py-0.5 rounded ml-2">
                       {o.slotTime}
                     </div>
                   </div>

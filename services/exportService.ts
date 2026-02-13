@@ -7,10 +7,9 @@ import autoTable from 'jspdf-autotable';
 export const exportToCSV = (date: string, data: any[]) => {
   const header = ['Orario', 'Dipendente', 'Pizza', 'Variazioni', 'Note'];
   const rows = data.map(o => {
-    const mods = [
-      o.addMod ? `+${o.addMod.name}` : '',
-      o.removeMod ? `-${o.removeMod.name}` : ''
-    ].filter(Boolean).join(", ");
+    const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
+    const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
+    const mods = [...addMods, ...removeMods].join(" | ");
     
     return [o.slotTime, `${o.user.firstName} ${o.user.lastName}`, o.pizza.name, mods || '—', o.note || '—'];
   });
@@ -27,10 +26,9 @@ export const exportToCSV = (date: string, data: any[]) => {
 export const exportToXLSX = (date: string, orders: any[]) => {
   const workbook = XLSX.utils.book_new();
   const worksheetData = orders.map(o => {
-    const mods = [
-      o.addMod ? `+${o.addMod.name}` : '',
-      o.removeMod ? `-${o.removeMod.name}` : ''
-    ].filter(Boolean).join(", ");
+    const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
+    const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
+    const mods = [...addMods, ...removeMods].join(", ");
 
     return {
       Orario: o.slotTime,
@@ -63,10 +61,9 @@ export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>,
       yPos += 5;
 
       const body = slotOrders.map(o => {
-        const mods = [
-          o.addMod ? `+${o.addMod.name}` : '',
-          o.removeMod ? `-${o.removeMod.name}` : ''
-        ].filter(Boolean).join(", ");
+        const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
+        const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
+        const mods = [...addMods, ...removeMods].join(", ");
 
         return [
           `${o.user.firstName} ${o.user.lastName}`,
@@ -80,6 +77,8 @@ export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>,
         startY: yPos,
         head: [['Dipendente', 'Pizza', 'Variazioni', 'Note']],
         body: body,
+        theme: 'striped',
+        headStyles: { fillColor: [0, 122, 255] }
       });
 
       yPos = (doc as any).lastAutoTable.finalY + 15;
@@ -96,6 +95,8 @@ export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>,
     startY: yPos,
     head: [['Pizza', 'Quantità']],
     body: pizzaTotalsBody,
+    theme: 'grid',
+    headStyles: { fillColor: [52, 199, 89] }
   });
 
   doc.save(`ordini_${date}.pdf`);

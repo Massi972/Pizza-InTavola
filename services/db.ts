@@ -25,17 +25,12 @@ export interface GlobalSettings {
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Error in ${context}:`, error);
-    
-    // Errore tabella mancante (Postgres code 42P01)
     if (error.code === '42P01') {
-      throw new Error(`Configurazione Database Mancante: La tabella necessaria per "${context}" non esiste. Vai nell'editor SQL di Supabase e crea le tabelle.`);
+      throw new Error(`Configurazione Database Mancante: La tabella necessaria per "${context}" non esiste. Vai nell'editor SQL di Supabase.`);
     }
-    
-    // Errore colonna mancante (Postgres code 42703)
     if (error.code === '42703') {
-      throw new Error(`Aggiornamento Database Richiesto: Una colonna necessaria per "${context}" manca. Controlla lo schema SQL.`);
+      throw new Error(`Aggiornamento Database Richiesto: Una colonna necessaria (es. add_modification_ids) manca.`);
     }
-
     const msg = error.message || "Errore sconosciuto";
     throw new Error(`${context}: ${msg}`);
   }
@@ -141,16 +136,9 @@ class DB {
       active: pizza.active !== false, 
       is_vegetarian: pizza.isVegetarian || false 
     };
-    
-    let error;
-    if (pizza.id) {
-      const res = await supabase.from('pizzas').update(payload).eq('id', pizza.id);
-      error = res.error;
-    } else {
-      const res = await supabase.from('pizzas').insert([payload]);
-      error = res.error;
-    }
-    
+    const { error } = pizza.id
+      ? await supabase.from('pizzas').update(payload).eq('id', pizza.id)
+      : await supabase.from('pizzas').insert([payload]);
     if (error) await this.handleError(error, "Salvataggio pizza");
   }
 
@@ -162,7 +150,7 @@ class DB {
   async getModifications(): Promise<Modification[]> {
     const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
     if (error) {
-      if (error.code === '42P01') return []; // Tabella non ancora creata
+      if (error.code === '42P01') return [];
       await this.handleError(error, "Caricamento varianti");
     }
     return (data || []).map(m => ({
@@ -181,16 +169,9 @@ class DB {
       active: mod.active !== false,
       sort_order: mod.sort_order || 0
     };
-    
-    let error;
-    if (mod.id) {
-      const res = await supabase.from('modifications').update(payload).eq('id', mod.id);
-      error = res.error;
-    } else {
-      const res = await supabase.from('modifications').insert([payload]);
-      error = res.error;
-    }
-    
+    const { error } = mod.id
+      ? await supabase.from('modifications').update(payload).eq('id', mod.id)
+      : await supabase.from('modifications').insert([payload]);
     if (error) await this.handleError(error, "Salvataggio variante");
   }
 
@@ -259,8 +240,8 @@ class DB {
       userId: o.user_id, 
       pizzaId: o.pizza_id, 
       slotTime: o.slot_time as SlotTime,
-      addModificationId: o.add_modification_id,
-      removeModificationId: o.remove_modification_id,
+      addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
+      removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
       note: o.note || '', 
       createdAt: o.created_at, 
       updatedAt: o.updated_at 
@@ -278,8 +259,8 @@ class DB {
       userId: data.user_id, 
       pizzaId: data.pizza_id, 
       slotTime: data.slot_time as SlotTime,
-      addModificationId: data.add_modification_id,
-      removeModificationId: data.remove_modification_id,
+      addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
+      removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
       note: data.note || '', 
       createdAt: data.created_at, 
       updatedAt: data.updated_at 
@@ -292,12 +273,11 @@ class DB {
       user_id: order.userId, 
       pizza_id: order.pizzaId, 
       slot_time: order.slotTime, 
-      add_modification_id: order.addModificationId || null,
-      remove_modification_id: order.removeModificationId || null,
+      add_modification_ids: order.addModificationIds || [],
+      remove_modification_ids: order.removeModificationIds || [],
       note: order.note || '',
       updated_at: new Date().toISOString() 
     };
-    
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
   }

@@ -17,7 +17,9 @@ import {
   UserIcon,
   ChevronRight,
   ChevronLeft,
-  LogOut
+  LogOut,
+  Plus,
+  Trash2
 } from '../components/Icons';
 import { isBeforeCutoff } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
@@ -40,8 +42,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
   const [slot, setSlot] = useState<SlotTime>('18:00');
-  const [addModId, setAddModId] = useState<string | null>(null);
-  const [removeModId, setRemoveModId] = useState<string | null>(null);
+  const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
+  const [selectedRemoveIds, setSelectedRemoveIds] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -92,27 +94,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
     fetchData();
   }, [user.id]);
 
-  const handleToggleBiometrics = async () => {
-    if (biometricEnabled) {
-      localStorage.removeItem('pizzastaff_stored_pin');
-      localStorage.setItem('pizzastaff_biometric_enabled', 'false');
-      setBiometricEnabled(false);
-      setMessage({ text: "Accesso biometrico disattivato", type: "success" });
-    } else {
-      setSubmitting(true);
-      const success = await registerBiometrics(user.id, `${user.firstName} ${user.lastName}`);
-      if (success) {
-        localStorage.setItem('pizzastaff_stored_pin', user.pin);
-        localStorage.setItem('pizzastaff_biometric_enabled', 'true');
-        localStorage.removeItem('pizzastaff_biometric_declined');
-        setBiometricEnabled(true);
-        setMessage({ text: "Face ID / Touch ID attivato!", type: "success" });
-      } else {
-        setMessage({ text: "Operazione annullata", type: "error" });
-      }
-      setSubmitting(false);
-    }
-    setTimeout(() => setMessage(null), 3000);
+  const handleToggleAdd = (id: string) => {
+    setSelectedAddIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleToggleRemove = (id: string) => {
+    setSelectedRemoveIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const handleConfirmOrder = async () => {
@@ -125,16 +112,16 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
-        addModificationId: addModId || null,
-        removeModificationId: removeModId || null,
+        addModificationIds: selectedAddIds,
+        removeModificationIds: selectedRemoveIds,
         note: ''
       };
       await db.saveOrder(order);
       const updatedOrder = await db.getUserOrderToday(user.id);
       setMyOrder(updatedOrder);
       setSelectedPizza(null);
-      setAddModId(null);
-      setRemoveModId(null);
+      setSelectedAddIds([]);
+      setSelectedRemoveIds([]);
       setIsEditing(false);
       setMessage({ text: "Ordine inviato con successo!", type: "success" });
       setTimeout(() => setMessage(null), 3000);
@@ -177,17 +164,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
               <div>
                 <p className={`text-[10px] font-black ${overrideActive ? 'text-[#5856D6]' : 'text-[#34C759]'} uppercase tracking-widest mb-1`}>Prenotazione Attiva</p>
                 <h2 className="text-2xl font-black">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
-                <div className="mt-1 space-y-0.5">
-                  {myOrder.addModificationId && (
-                    <p className="text-[10px] text-green-600 font-bold uppercase tracking-tight">
-                      + {modifications.find(m => m.id === myOrder.addModificationId)?.name || 'Variante'}
-                    </p>
-                  )}
-                  {myOrder.removeModificationId && (
-                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-tight">
-                      - {modifications.find(m => m.id === myOrder.removeModificationId)?.name || 'Variante'}
-                    </p>
-                  )}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {myOrder.addModificationIds?.map(id => {
+                    const mod = modifications.find(m => m.id === id);
+                    return mod ? <span key={id} className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">+{mod.name}</span> : null;
+                  })}
+                  {myOrder.removeModificationIds?.map(id => {
+                    const mod = modifications.find(m => m.id === id);
+                    return mod ? <span key={id} className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">-{mod.name}</span> : null;
+                  })}
                 </div>
               </div>
               <div className="bg-[#F2F2F7] px-3 py-1.5 rounded-full flex items-center gap-1.5">
@@ -201,8 +186,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
                 if(p) { 
                   setSelectedPizza(p); 
                   setSlot(myOrder.slotTime); 
-                  setAddModId(myOrder.addModificationId || null); 
-                  setRemoveModId(myOrder.removeModificationId || null);
+                  setSelectedAddIds(myOrder.addModificationIds || []); 
+                  setSelectedRemoveIds(myOrder.removeModificationIds || []);
                   setIsEditing(true); 
                 }
               }} variant="secondary" fullWidth className="!bg-[#F2F2F7] hover:!bg-[#E5E5EA]">
@@ -245,83 +230,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
     );
   };
 
-  const renderSettings = () => (
-    <div className="space-y-6 animate-in slide-in-from-right duration-300">
-      <div className="text-center py-6">
-        <div className="w-20 h-20 bg-[#007AFF] rounded-full flex items-center justify-center text-white mx-auto shadow-xl mb-3">
-          <UserIcon size={40} />
-        </div>
-        <h2 className="text-xl font-black">{user.firstName} {user.lastName}</h2>
-        <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest mt-1">Dipendente</p>
-      </div>
-
-      <div className="space-y-4">
-        <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest px-4">Sicurezza e Accesso</p>
-        <Card className="divide-y divide-[#F2F2F7]">
-          {isBioSupported ? (
-            <div className="p-4 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${biometricEnabled ? 'bg-green-100 text-green-600' : 'bg-[#F2F2F7] text-[#8E8E93]'}`}>
-                  <Fingerprint size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold">Face ID / Touch ID</p>
-                  <p className="text-[10px] text-[#8E8E93]">{biometricEnabled ? 'Attivo per questo dispositivo' : 'Accedi senza inserire il PIN'}</p>
-                </div>
-              </div>
-              <button 
-                onClick={handleToggleBiometrics}
-                disabled={submitting}
-                className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ${biometricEnabled ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${biometricEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
-              </button>
-            </div>
-          ) : (
-            <div className="p-4 flex items-center gap-3 opacity-50">
-              <Fingerprint size={20} className="text-[#8E8E93]" />
-              <p className="text-sm font-medium text-[#8E8E93]">Biometria non supportata</p>
-            </div>
-          )}
-          
-          <div className="p-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-[#F2F2F7] text-[#8E8E93]">
-                <Lock size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-bold">PIN Personale</p>
-                <p className="text-[10px] text-[#8E8E93]">Il tuo codice: ****</p>
-              </div>
-            </div>
-            <span className="text-xs text-[#8E8E93] font-bold">PRIVATO</span>
-          </div>
-        </Card>
-
-        <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest px-4 pt-4">Account</p>
-        <Card>
-          <button 
-            onClick={onLogout}
-            className="w-full p-4 flex justify-between items-center active:bg-[#F2F2F7] transition-colors"
-          >
-            <div className="flex items-center gap-3 text-[#FF3B30]">
-              <div className="p-2 rounded-xl bg-red-50">
-                <LogOut size={20} />
-              </div>
-              <span className="text-sm font-bold">Esci dall'applicazione</span>
-            </div>
-            <ChevronRight size={18} className="text-[#C6C6C8]" />
-          </button>
-        </Card>
-
-        <p className="text-center text-[10px] text-[#8E8E93] font-medium pt-8">
-          Pizza InTavola Staff v2.1.0<br/>
-          Sviluppato per InTavola SRL
-        </p>
-      </div>
-    </div>
-  );
-
   return (
     <Layout 
       title={activeTab === 'menu' ? 'Menu Pizze' : 'Impostazioni'}
@@ -336,20 +244,30 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         </div>
       )}
 
-      {activeTab === 'menu' ? renderMenu() : renderSettings()}
+      {activeTab === 'menu' ? renderMenu() : (
+        <div className="space-y-6 animate-in slide-in-from-right duration-300">
+           <div className="text-center py-6">
+            <div className="w-20 h-20 bg-[#007AFF] rounded-full flex items-center justify-center text-white mx-auto shadow-xl mb-3">
+              <UserIcon size={40} />
+            </div>
+            <h2 className="text-xl font-black">{user.firstName} {user.lastName}</h2>
+            <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest mt-1">Dipendente</p>
+          </div>
+          <Card>
+            <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold">
+              <span>Esci</span>
+              <LogOut size={20} />
+            </button>
+          </Card>
+        </div>
+      )}
 
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg ios-blur border-t border-[#C6C6C8] px-8 py-3 pb-8 flex justify-between items-center z-40">
-        <button 
-          onClick={() => setActiveTab('menu')}
-          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'menu' ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}
-        >
+        <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center gap-1 ${activeTab === 'menu' ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
           <PizzaIcon size={24} />
           <span className="text-[10px] font-bold">Ordina</span>
         </button>
-        <button 
-          onClick={() => setActiveTab('settings')}
-          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'settings' ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}
-        >
+        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
           <Settings size={24} />
           <span className="text-[10px] font-bold">Impostazioni</span>
         </button>
@@ -357,49 +275,58 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
       {selectedPizza && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { if(!submitting) setSelectedPizza(null); }} />
-          <div className="relative bg-white rounded-t-[32px] p-6 pb-12 space-y-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
-            <div className="w-12 h-1.5 bg-[#E5E5EA] rounded-full mx-auto" />
-            <h2 className="text-2xl font-black">{selectedPizza.name}</h2>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !submitting && setSelectedPizza(null)} />
+          <div className="relative bg-[#F2F2F7] rounded-t-[32px] p-6 pb-12 space-y-6 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90vh]">
+            <div className="w-12 h-1.5 bg-[#C6C6C8] rounded-full mx-auto" />
+            <h2 className="text-2xl font-black text-center">{selectedPizza.name}</h2>
+            
             <div className="space-y-6">
-              <div className="space-y-2">
+              <section className="space-y-3">
                 <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Orario di ritiro</p>
                 <SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} />
-              </div>
+              </section>
 
-              <div className="space-y-3">
-                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Modifiche (Opzionali)</p>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[11px] font-bold text-[#8E8E93] uppercase pl-1 block mb-1">Aggiungi</label>
-                    <select 
-                      className="w-full px-4 py-3 rounded-xl bg-[#F2F2F7] border-none text-sm font-medium appearance-none"
-                      value={addModId || ''}
-                      onChange={(e) => setAddModId(e.target.value || null)}
+              <section className="space-y-3">
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Aggiunte (+)</p>
+                <div className="bg-white rounded-2xl overflow-hidden divide-y divide-[#F2F2F7]">
+                  {addOptions.map(opt => (
+                    <button 
+                      key={opt.id} 
+                      onClick={() => handleToggleAdd(opt.id)}
+                      className="w-full flex items-center justify-between p-4 active:bg-[#F2F2F7] transition-colors"
                     >
-                      <option value="">Nessuna aggiunta</option>
-                      {addOptions.map(opt => (
-                        <option key={opt.id} value={opt.id}>+ {opt.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-[#8E8E93] uppercase pl-1 block mb-1">Togli</label>
-                    <select 
-                      className="w-full px-4 py-3 rounded-xl bg-[#F2F2F7] border-none text-sm font-medium appearance-none"
-                      value={removeModId || ''}
-                      onChange={(e) => setRemoveModId(e.target.value || null)}
-                    >
-                      <option value="">Nessuna rimozione</option>
-                      {removeOptions.map(opt => (
-                        <option key={opt.id} value={opt.id}>- {opt.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                      <span className="text-sm font-medium">{opt.name}</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        selectedAddIds.includes(opt.id) ? 'bg-[#007AFF] border-[#007AFF]' : 'border-[#C6C6C8]'
+                      }`}>
+                        {selectedAddIds.includes(opt.id) && <Check size={14} className="text-white" />}
+                      </div>
+                    </button>
+                  ))}
+                  {addOptions.length === 0 && <p className="p-4 text-xs text-[#8E8E93] text-center">Nessuna opzione disponibile</p>}
                 </div>
-              </div>
+              </section>
+
+              <section className="space-y-3">
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Rimossoni (-)</p>
+                <div className="bg-white rounded-2xl overflow-hidden divide-y divide-[#F2F2F7]">
+                  {removeOptions.map(opt => (
+                    <button 
+                      key={opt.id} 
+                      onClick={() => handleToggleRemove(opt.id)}
+                      className="w-full flex items-center justify-between p-4 active:bg-[#F2F2F7] transition-colors"
+                    >
+                      <span className="text-sm font-medium">{opt.name}</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        selectedRemoveIds.includes(opt.id) ? 'bg-[#FF3B30] border-[#FF3B30]' : 'border-[#C6C6C8]'
+                      }`}>
+                        {selectedRemoveIds.includes(opt.id) && <Check size={14} className="text-white" />}
+                      </div>
+                    </button>
+                  ))}
+                   {removeOptions.length === 0 && <p className="p-4 text-xs text-[#8E8E93] text-center">Nessuna opzione disponibile</p>}
+                </div>
+              </section>
 
               <Button fullWidth onClick={handleConfirmOrder} disabled={submitting}>
                 {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Invia Ordine'}

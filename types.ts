@@ -55,9 +55,9 @@ export interface Order {
   userId: string;
   pizzaId: string;
   slotTime: SlotTime;
-  addModificationId?: string | null;
-  removeModificationId?: string | null;
-  note: string; // Mantenuto per compatibilità, ma non più usato dai worker
+  addModificationIds: string[]; // Modificato in array
+  removeModificationIds: string[]; // Modificato in array
+  note: string;
   createdAt: string;
   updatedAt: string;
 }
