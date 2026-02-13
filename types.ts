@@ -11,6 +11,7 @@ export interface User {
   id: string;
   firstName: string;
   lastName: string;
+  email: string; // Nuova proprietà
   pin: string;
   role: Role;
   active: boolean;

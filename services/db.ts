@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
 
@@ -53,6 +54,7 @@ class DB {
       id: u.id, 
       firstName: u.first_name, 
       lastName: u.last_name, 
+      email: u.email || '', // Mappatura email
       pin: u.pin, 
       role: u.role, 
       active: u.active 
@@ -67,6 +69,7 @@ class DB {
       id: data.id, 
       firstName: data.first_name, 
       lastName: data.last_name, 
+      email: data.email || '',
       pin: data.pin, 
       role: data.role, 
       active: data.active 
@@ -91,6 +94,7 @@ class DB {
     const payload = { 
       first_name: user.firstName, 
       last_name: user.lastName, 
+      email: user.email, // Salvataggio email
       pin: user.pin, 
       role: user.role, 
       active: user.active 
@@ -107,6 +111,16 @@ class DB {
   async deleteUser(id: string): Promise<void> {
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw error;
+  }
+
+  // Chiamata alla Edge Function per il recupero PIN
+  async recoverPin(email: string): Promise<void> {
+    const { error } = await supabase.functions.invoke('recover-pin', {
+      body: { email }
+    });
+    // Ritorniamo sempre successo al client per sicurezza,
+    // a meno che non sia un errore di rete critico.
+    if (error && error.message.includes('Failed to fetch')) throw error;
   }
 
   async getPizzas(): Promise<Pizza[]> {

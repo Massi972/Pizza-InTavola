@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { db } from '../services/db';
 import { User, Role } from '../types';
 import { Button, Input, Card } from '../components/UI';
-import { ChevronRight, X } from '../components/Icons';
+import { ChevronRight, X, AlertCircle, Check } from '../components/Icons';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -14,6 +15,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'pin' | 'reset-search' | 'reset-verify' | 'reset-new-pin'>('pin');
   
+  // Stati per recupero PIN
+  const [showRecover, setShowRecover] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoverMessage, setRecoverMessage] = useState('');
+
   const [workerUsers, setWorkerUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -53,6 +60,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
+  const handleRecoverPin = async () => {
+    if (!recoverEmail) return;
+    setIsRecovering(true);
+    setRecoverMessage('');
+    try {
+      await db.recoverPin(recoverEmail);
+      setRecoverMessage('Se l’email è registrata, riceverai un messaggio con il tuo PIN.');
+    } catch (err) {
+      setRecoverMessage('Errore durante la richiesta. Riprova più tardi.');
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
   const handleVerifyMasterCode = async () => {
     setLoading(true);
     try {
@@ -74,7 +95,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      // CONTROLLO UNICITÀ PIN
       const isAvailable = await db.isPinAvailable(newPin);
       if (!isAvailable) {
         setError('Questo PIN è già in uso da un altro dipendente. Scegline uno diverso.');
@@ -151,12 +171,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           {mode === 'pin' && (
-            <>
+            <div className="flex flex-col gap-4">
               {renderNumpad(pin, setPin, handleLogin)}
-              <button onClick={startReset} className="w-full mt-8 text-[#007AFF] font-bold text-sm">
-                Non hai un PIN o l'hai dimenticato?
-              </button>
-            </>
+              <div className="flex flex-col gap-3 mt-4">
+                <button onClick={() => setShowRecover(true)} className="w-full text-[#007AFF] font-bold text-sm">
+                  Non ricordi il PIN?
+                </button>
+                <button onClick={startReset} className="w-full text-[#8E8E93] font-medium text-xs">
+                  Primo accesso o reset manuale
+                </button>
+              </div>
+            </div>
           )}
 
           {mode === 'reset-search' && (
@@ -198,6 +223,54 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {mode === 'reset-new-pin' && renderNumpad(newPin, setNewPin, handleSetNewPin)}
         </div>
       </div>
+
+      {/* MODALE RECUPERO PIN (BOTTOM SHEET iOS STYLE) */}
+      {showRecover && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !isRecovering && setShowRecover(false)} />
+          <div className="relative bg-white rounded-t-[32px] p-8 space-y-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="w-12 h-1.5 bg-[#E5E5EA] rounded-full mx-auto mb-2" />
+            
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Recupero PIN</h2>
+              <button disabled={isRecovering} onClick={() => setShowRecover(false)} className="bg-[#F2F2F7] p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            {recoverMessage ? (
+              <div className="bg-[#F2F2F7] p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
+                <div className="w-12 h-12 bg-[#34C759] rounded-full flex items-center justify-center text-white">
+                   <Check size={24} />
+                </div>
+                <p className="font-bold text-[#1c1c1e]">{recoverMessage}</p>
+                <Button fullWidth onClick={() => setShowRecover(false)}>Chiudi</Button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <p className="text-[#8E8E93] text-sm font-medium">
+                    Inserisci l'email che l'amministratore ha registrato per il tuo profilo. Riceverai il tuo PIN attuale.
+                  </p>
+                  <Input 
+                    type="email"
+                    placeholder="La tua email personale"
+                    value={recoverEmail}
+                    onChange={(e) => setRecoverEmail(e.target.value)}
+                    disabled={isRecovering}
+                    autoFocus
+                  />
+                </div>
+                <div className="pt-2">
+                  <Button fullWidth onClick={handleRecoverPin} disabled={!recoverEmail || isRecovering}>
+                    {isRecovering ? <div className="loading-spinner border-white border-t-transparent" /> : 'Invia PIN'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

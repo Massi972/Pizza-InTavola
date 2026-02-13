@@ -65,6 +65,8 @@ export const INITIAL_USERS: User[] = [
     id: 'u1',
     firstName: 'Mario',
     lastName: 'Rossi',
+    // Added missing email property
+    email: 'mario.rossi@example.com',
     pin: '1234',
     role: Role.ADMIN,
     active: true
@@ -73,6 +75,8 @@ export const INITIAL_USERS: User[] = [
     id: 'u2',
     firstName: 'Luigi',
     lastName: 'Verdi',
+    // Added missing email property
+    email: 'luigi.verdi@example.com',
     pin: '1111',
     role: Role.SUPERVISOR,
     active: true
@@ -81,6 +85,8 @@ export const INITIAL_USERS: User[] = [
     id: 'u3',
     firstName: 'Anna',
     lastName: 'Bianchi',
+    // Added missing email property
+    email: 'anna.bianchi@example.com',
     pin: '0000',
     role: Role.WORKER,
     active: true

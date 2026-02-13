@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Role } from '../types';
 import { db } from '../services/db';
@@ -33,8 +34,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   }, []);
 
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin) {
-      setError('Compila tutti i campi obbligatori');
+    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.email) {
+      setError('Compila tutti i campi obbligatori (Email inclusa)');
       return;
     }
     
@@ -43,7 +44,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     
     try {
       // CONTROLLO UNICITÀ PIN
-      // Escludiamo l'utente corrente dalla ricerca se stiamo modificando (per permettergli di mantenere il proprio PIN)
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
       
       if (!isAvailable) {
@@ -78,7 +78,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     let isUnique = false;
     let attempts = 0;
     
-    // Proviamo a generare un PIN unico (max 10 tentativi per sicurezza)
     while (!isUnique && attempts < 10) {
       pin = Math.floor(1000 + Math.random() * 9000).toString();
       isUnique = await db.isPinAvailable(pin, editing?.id);
@@ -92,7 +91,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
       <div className="space-y-4">
-        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true }); setError(''); }}>
+        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '' }); setError(''); }}>
           <Plus size={20} /> Aggiungi Dipendente
         </Button>
 
@@ -123,14 +122,17 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex justify-between items-center">
-                  <div className="flex items-center gap-1 text-[#8E8E93]">
-                    <Lock size={12} />
-                    <span className="text-xs font-mono font-bold tracking-widest">{u.pin}</span>
+                <div className="mt-3 pt-3 border-t border-[#F2F2F7] space-y-2">
+                   <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1 text-[#8E8E93]">
+                      <Lock size={12} />
+                      <span className="text-xs font-mono font-bold tracking-widest">{u.pin}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {u.active ? 'ATTIVO' : 'SOSPESO'}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {u.active ? 'ATTIVO' : 'SOSPESO'}
-                  </span>
+                  <p className="text-[10px] text-[#8E8E93] font-medium break-all">{u.email}</p>
                 </div>
               </Card>
             ))}
@@ -168,6 +170,16 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 </div>
               </div>
               
+              <div>
+                <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Email Personale (per recupero PIN)</label>
+                <Input 
+                  type="email"
+                  placeholder="email@esempio.it"
+                  value={editing.email || ''} 
+                  onChange={e => { setError(''); setEditing({...editing, email: e.target.value}); }} 
+                />
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Ruolo</label>
                 <select 
