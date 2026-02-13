@@ -1,18 +1,28 @@
+
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({ 
   children, 
   variant = 'primary', 
+  size = 'md',
   fullWidth = false, 
   className = '', 
   ...props 
 }) => {
-  const baseStyles = "px-4 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2";
+  const baseStyles = "rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2";
+  
+  const sizeStyles = {
+    sm: "px-3 py-1.5 text-xs",
+    md: "px-4 py-3 text-sm",
+    lg: "px-6 py-4 text-base"
+  };
+
   const variants = {
     primary: "bg-[#007AFF] text-white shadow-sm",
     secondary: "bg-[#E5E5EA] text-[#000000] hover:bg-[#D1D1D6]",
@@ -22,7 +32,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button 
-      className={`${baseStyles} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${sizeStyles[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
       {children}
@@ -39,13 +49,10 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ c
   );
 };
 
-// FIX: Estendiamo correttamente React.HTMLAttributes per includere className, onClick e altri attributi standard
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
 }
 
-// FIX: Convertiamo Card in React.FC per gestire correttamente i prop speciali di React come 'key'
-// e assicurare che 'className' sia riconosciuto correttamente durante la destrutturazione.
 export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => {
   return (
     <div 
