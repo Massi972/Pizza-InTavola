@@ -55,8 +55,10 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       await db.saveUser(editing);
       await fetchUsers();
       setEditing(null);
-    } catch (err) {
-      setError("Errore nel salvataggio dei dati.");
+    } catch (err: any) {
+      // Mostriamo il messaggio d'errore reale del database per il debug
+      setError(err.message || "Errore imprevisto nel salvataggio.");
+      console.error("Dettaglio Errore:", err);
     } finally {
       setSaving(false);
     }
@@ -154,7 +156,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
             {error && (
               <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-center gap-3 text-[#FF3B30] text-sm font-bold animate-in fade-in zoom-in-95 duration-200">
                 <AlertCircle size={20} />
-                {error}
+                <span className="flex-1 break-words">{error}</span>
               </div>
             )}
 

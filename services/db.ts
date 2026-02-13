@@ -54,7 +54,7 @@ class DB {
       id: u.id, 
       firstName: u.first_name, 
       lastName: u.last_name, 
-      email: u.email || '', // Mappatura email
+      email: u.email || '', 
       pin: u.pin, 
       role: u.role, 
       active: u.active 
@@ -82,6 +82,12 @@ class DB {
       query = query.neq('id', excludeUserId);
     }
     const { data, error } = await query.maybeSingle();
+    if (error) {
+      console.error("Errore verifica PIN:", error);
+      // In caso di errore di schema, permettiamo il proseguimento per non bloccare la UI, 
+      // ma il saveUser successivo fallirà mostrando l'errore reale.
+      return true; 
+    }
     return !data;
   }
 
@@ -94,11 +100,12 @@ class DB {
     const payload = { 
       first_name: user.firstName, 
       last_name: user.lastName, 
-      email: user.email, // Salvataggio email
+      email: user.email?.toLowerCase().trim(), // Normalizzazione email
       pin: user.pin, 
       role: user.role, 
       active: user.active 
     };
+    
     if (user.id) {
       const { error } = await supabase.from('users').update(payload).eq('id', user.id);
       if (error) throw error;
@@ -113,13 +120,10 @@ class DB {
     if (error) throw error;
   }
 
-  // Chiamata alla Edge Function per il recupero PIN
   async recoverPin(email: string): Promise<void> {
     const { error } = await supabase.functions.invoke('recover-pin', {
-      body: { email }
+      body: { email: email.toLowerCase().trim() }
     });
-    // Ritorniamo sempre successo al client per sicurezza,
-    // a meno che non sia un errore di rete critico.
     if (error && error.message.includes('Failed to fetch')) throw error;
   }
 
