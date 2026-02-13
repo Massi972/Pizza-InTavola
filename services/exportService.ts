@@ -1,103 +1,130 @@
 
-import { Order, Pizza, User, SlotTime } from '../types';
-import * as XLSX from 'xlsx';
+import { Order, Pizza, User, SlotTime, Modification } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatDate } from './utils';
 
-export const exportToCSV = (date: string, data: any[]) => {
-  const header = ['Orario', 'Dipendente', 'Pizza', 'Variazioni', 'Note'];
-  const rows = data.map(o => {
-    const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
-    const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
-    const mods = [...addMods, ...removeMods].join(" | ");
-    
-    return [o.slotTime, `${o.user.firstName} ${o.user.lastName}`, o.pizza.name, mods || '—', o.note || '—'];
-  });
-  
-  const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", `ordini_${date}.csv`);
-  link.click();
-};
+export interface HydratedOrder extends Order {
+  user?: User;
+  pizza?: Pizza;
+  addMods: Modification[];
+  removeMods: Modification[];
+}
 
-export const exportToXLSX = (date: string, orders: any[]) => {
-  const workbook = XLSX.utils.book_new();
-  const worksheetData = orders.map(o => {
-    const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
-    const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
-    const mods = [...addMods, ...removeMods].join(", ");
-
-    return {
-      Orario: o.slotTime,
-      Dipendente: `${o.user.firstName} ${o.user.lastName}`,
-      Pizza: o.pizza.name,
-      Variazioni: mods || '—',
-      Note: o.note || '—'
-    };
-  });
-
-  const ws = XLSX.utils.json_to_sheet(worksheetData);
-  XLSX.utils.book_append_sheet(workbook, ws, "Ordini");
-  XLSX.writeFile(workbook, `ordini_${date}.xlsx`);
-};
-
-export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>, totalByPizza: Record<string, number>) => {
+export const generateDayReportPDF = (
+  date: string, 
+  orders: HydratedOrder[], 
+  slots: SlotTime[]
+) => {
   const doc = new jsPDF();
-  doc.setFontSize(20);
-  doc.text("Riepilogo Ordini Pizza", 14, 22);
+  const pageWidth = doc.internal.pageSize.width;
+
+  // Header
+  doc.setFontSize(22);
+  doc.setTextColor(0, 122, 255);
+  doc.text("IN TAVOLA - Report Pizze Staff", 14, 20);
+  
   doc.setFontSize(12);
-  doc.text(`Data: ${date}`, 14, 30);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Data: ${formatDate(date)}`, 14, 28);
+  doc.text(`Totale Pizze: ${orders.length}`, pageWidth - 14, 28, { align: 'right' });
 
   let yPos = 40;
 
-  (['17:30', '18:00', '19:00'] as SlotTime[]).forEach(slot => {
-    const slotOrders = ordersBySlot[slot] || [];
-    if (slotOrders.length > 0) {
-      doc.setFontSize(14);
-      doc.text(`Slot Orario: ${slot}`, 14, yPos);
-      yPos += 5;
+  // 1. Riepilogo Aggregato per Cucina (Cosa preparare in totale)
+  doc.setFontSize(16);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Riepilogo Preparazione (Totale)", 14, yPos);
+  yPos += 5;
 
-      const body = slotOrders.map(o => {
-        const addMods = (o.addMods || []).map((m: any) => `+${m.name}`);
-        const removeMods = (o.removeMods || []).map((m: any) => `-${m.name}`);
-        const mods = [...addMods, ...removeMods].join(", ");
-
-        return [
-          `${o.user.firstName} ${o.user.lastName}`,
-          o.pizza.name,
-          mods || '—',
-          o.note || '—'
-        ];
-      });
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Dipendente', 'Pizza', 'Variazioni', 'Note']],
-        body: body,
-        theme: 'striped',
-        headStyles: { fillColor: [0, 122, 255] }
-      });
-
-      yPos = (doc as any).lastAutoTable.finalY + 15;
-      if (yPos > 260) { doc.addPage(); yPos = 20; }
+  // Raggruppiamo per "Configurazione" (Pizza + Modifiche specifiche)
+  const configMap = new Map<string, { name: string, mods: string, count: number }>();
+  
+  orders.forEach(o => {
+    const pizzaName = o.pizza?.name || 'Pizza Sconosciuta';
+    const modStrings = [
+      ...o.addMods.map(m => `+${m.name}`),
+      ...o.removeMods.map(m => `-${m.name}`)
+    ].sort().join(", ");
+    
+    const key = `${o.pizzaId}|${modStrings}`;
+    const existing = configMap.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      configMap.set(key, { name: pizzaName, mods: modStrings || '—', count: 1 });
     }
   });
 
-  doc.setFontSize(14);
-  doc.text("Totali per Pizza", 14, yPos);
-  yPos += 5;
-  const pizzaTotalsBody = Object.entries(totalByPizza).map(([name, qty]) => [name, qty]);
-  
+  const summaryBody = Array.from(configMap.values())
+    .sort((a, b) => b.count - a.count)
+    .map(item => [item.count.toString(), item.name, item.mods]);
+
   autoTable(doc, {
     startY: yPos,
-    head: [['Pizza', 'Quantità']],
-    body: pizzaTotalsBody,
+    head: [['Q.tà', 'Pizza', 'Variazioni']],
+    body: summaryBody,
     theme: 'grid',
-    headStyles: { fillColor: [52, 199, 89] }
+    headStyles: { fillColor: [52, 199, 89], fontStyle: 'bold' }, // Verde per il riepilogo
+    columnStyles: { 0: { cellWidth: 20, fontStyle: 'bold', halign: 'center' } }
   });
 
-  doc.save(`ordini_${date}.pdf`);
+  yPos = (doc as any).lastAutoTable.finalY + 15;
+
+  // 2. Dettaglio per Orario
+  doc.setFontSize(16);
+  doc.text("Dettaglio per Orario", 14, yPos);
+  yPos += 5;
+
+  slots.forEach(slot => {
+    const slotOrders = orders.filter(o => o.slotTime === slot);
+    if (slotOrders.length === 0) return;
+
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+    doc.setFontSize(13);
+    doc.setTextColor(0, 122, 255);
+    doc.text(`SLOT ORE ${slot} (${slotOrders.length} pizze)`, 14, yPos);
+    yPos += 3;
+
+    const body = slotOrders.map(o => {
+      const mods = [
+        ...o.addMods.map(m => `+${m.name}`),
+        ...o.removeMods.map(m => `-${m.name}`)
+      ].join(", ");
+
+      return [
+        `${o.user?.firstName} ${o.user?.lastName}`,
+        o.pizza?.name || '—',
+        mods || '—'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Dipendente', 'Pizza', 'Variazioni']],
+      body: body,
+      theme: 'striped',
+      headStyles: { fillColor: [0, 122, 255] },
+      margin: { left: 14 }
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+  });
+
+  // Footer con timestamp di generazione
+  const totalPages = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${i} di ${totalPages}`,
+      pageWidth / 2,
+      doc.internal.pageSize.height - 10,
+      { align: 'center' }
+    );
+  }
+
+  doc.save(`Report_Pizze_${date}.pdf`);
 };

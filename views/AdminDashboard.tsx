@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Day, DayStatus, SlotTime, Role } from '../types';
+import { User, Day, DayStatus, SlotTime, Role, Modification } from '../types';
 import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
@@ -16,9 +16,13 @@ import {
   X,
   Fingerprint,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Download,
+  FileText
 } from '../components/Icons';
 import { formatDate } from '../services/utils';
+import { generateDayReportPDF, HydratedOrder } from '../services/exportService';
+import { SLOT_TIMES } from '../constants';
 
 interface AdminDashboardProps {
   user: User;
@@ -29,7 +33,7 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavigate, onGoToOrder }) => {
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<HydratedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
@@ -50,16 +54,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       setSettings(globalSettings);
       
       if (day) {
-        const [dayOrders, users, pizzas] = await Promise.all([
+        const [dayOrders, users, pizzas, modifications] = await Promise.all([
           db.getOrdersByDay(day.id),
           db.getUsers(),
-          db.getPizzas()
+          db.getPizzas(),
+          db.getModifications()
         ]);
-        const hydratedOrders = dayOrders.map(o => ({
+
+        const hydratedOrders: HydratedOrder[] = dayOrders.map(o => ({
           ...o,
           user: users.find(u => u.id === o.userId),
-          pizza: pizzas.find(p => p.id === o.pizzaId)
+          pizza: pizzas.find(p => p.id === o.pizzaId),
+          addMods: (o.addModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[],
+          removeMods: (o.removeModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[]
         }));
+        
         setOrders(hydratedOrders);
       }
     } catch (err: any) {
@@ -77,6 +86,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleDownloadReport = () => {
+    if (!currentDay || orders.length === 0) {
+      alert("Nessun ordine presente per oggi.");
+      return;
+    }
+    generateDayReportPDF(currentDay.date, orders, SLOT_TIMES);
+  };
 
   const toggleBiometrics = () => {
     if (biometricEnabled) {
@@ -205,6 +222,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                 <p className="text-lg font-mono font-black">{settings.master_code}</p>
               </Card>
             </div>
+
+            {orders.length > 0 && (
+              <Button 
+                variant="primary" 
+                fullWidth 
+                onClick={handleDownloadReport}
+                className="!bg-[#34C759] hover:!bg-[#28A745] !py-4"
+              >
+                <FileText size={20} /> Scarica Report Ordini (PDF)
+              </Button>
+            )}
           </>
         )}
 
