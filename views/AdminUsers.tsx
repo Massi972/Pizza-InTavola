@@ -4,7 +4,7 @@ import { User, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X, Lock, AlertCircle } from '../components/Icons';
+import { Plus, Edit2, Trash2, X, Lock, AlertCircle, Check } from '../components/Icons';
 
 interface AdminUsersProps {
   onBack: () => void;
@@ -16,6 +16,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showSqlHint, setShowSqlHint] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -23,7 +24,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       const data = await db.getUsers();
       setUsers(data);
     } catch (err) {
-      alert("Errore caricamento utenti");
+      console.error("Errore fetch users:", err);
     } finally {
       setLoading(false);
     }
@@ -41,9 +42,9 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     
     setSaving(true);
     setError('');
+    setShowSqlHint(false);
     
     try {
-      // CONTROLLO UNICITÀ PIN
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
       
       if (!isAvailable) {
@@ -56,9 +57,15 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       await fetchUsers();
       setEditing(null);
     } catch (err: any) {
-      // Mostriamo il messaggio d'errore reale del database per il debug
-      setError(err.message || "Errore imprevisto nel salvataggio.");
-      console.error("Dettaglio Errore:", err);
+      const msg = err.message || "";
+      setError(msg);
+      
+      // Se l'errore indica che la colonna email non esiste
+      if (msg.toLowerCase().includes('column "email"') || msg.includes('schema cache')) {
+        setShowSqlHint(true);
+      }
+      
+      console.error("Dettaglio Errore Database:", err);
     } finally {
       setSaving(false);
     }
@@ -93,7 +100,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
       <div className="space-y-4">
-        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '' }); setError(''); }}>
+        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '' }); setError(''); setShowSqlHint(false); }}>
           <Plus size={20} /> Aggiungi Dipendente
         </Button>
 
@@ -116,7 +123,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => { setEditing(u); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
+                    <button onClick={() => { setEditing(u); setError(''); setShowSqlHint(false); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                       <Edit2 size={16} />
                     </button>
                     <button onClick={() => handleDelete(u.id)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
@@ -134,7 +141,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                       {u.active ? 'ATTIVO' : 'SOSPESO'}
                     </span>
                   </div>
-                  <p className="text-[10px] text-[#8E8E93] font-medium break-all">{u.email}</p>
+                  <p className="text-[10px] text-[#8E8E93] font-medium break-all">{u.email || 'Nessuna email salvata'}</p>
                 </div>
               </Card>
             ))}
@@ -154,9 +161,20 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
             </div>
 
             {error && (
-              <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-center gap-3 text-[#FF3B30] text-sm font-bold animate-in fade-in zoom-in-95 duration-200">
-                <AlertCircle size={20} />
-                <span className="flex-1 break-words">{error}</span>
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col gap-2 text-[#FF3B30] text-sm animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3 font-bold">
+                  <AlertCircle size={20} className="shrink-0" />
+                  <span className="flex-1">{error}</span>
+                </div>
+                {showSqlHint && (
+                  <div className="mt-2 p-3 bg-white/50 rounded-lg border border-red-200">
+                    <p className="text-[11px] font-bold uppercase text-red-800 mb-1">Soluzione Database:</p>
+                    <p className="text-[10px] mb-2">Devi aggiungere la colonna email su Supabase SQL Editor:</p>
+                    <code className="block bg-black text-white p-2 rounded text-[10px] font-mono break-all">
+                      ALTER TABLE users ADD COLUMN email TEXT;
+                    </code>
+                  </div>
+                )}
               </div>
             )}
 
