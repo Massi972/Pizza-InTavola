@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Pizza, Order, SlotTime, DayStatus, Modification } from '../types';
+import { User, Pizza, Order, SlotTime, DayStatus, Modification, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, SegmentedControl, Input } from '../components/UI';
@@ -19,7 +19,8 @@ import {
   ChevronLeft,
   LogOut,
   Plus,
-  Trash2
+  Trash2,
+  Sliders
 } from '../components/Icons';
 import { isBeforeCutoff } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
@@ -28,11 +29,12 @@ import { isBiometricAvailable, registerBiometrics } from '../services/biometrics
 interface WorkerDashboardProps {
   user: User;
   onLogout: () => void;
+  onBackToAdmin?: () => void;
 }
 
 type ViewState = 'menu' | 'settings';
 
-const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => {
+const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBackToAdmin }) => {
   const [activeTab, setActiveTab] = useState<ViewState>('menu');
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [modifications, setModifications] = useState<Modification[]>([]);
@@ -230,6 +232,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
     );
   };
 
+  const isManagement = user.role === Role.ADMIN || user.role === Role.SUPERVISOR;
+
   return (
     <Layout 
       title={activeTab === 'menu' ? 'Menu Pizze' : 'Impostazioni'}
@@ -251,7 +255,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
               <UserIcon size={40} />
             </div>
             <h2 className="text-xl font-black">{user.firstName} {user.lastName}</h2>
-            <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest mt-1">Dipendente</p>
+            <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest mt-1">{user.role}</p>
           </div>
           <Card>
             <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold">
@@ -259,6 +263,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
               <LogOut size={20} />
             </button>
           </Card>
+
+          {isManagement && onBackToAdmin && (
+            <Card className="border-2 border-[#5856D6]">
+              <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold">
+                <span>Pannello Admin</span>
+                <Sliders size={20} />
+              </button>
+            </Card>
+          )}
         </div>
       )}
 
@@ -267,6 +280,14 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           <PizzaIcon size={24} />
           <span className="text-[10px] font-bold">Ordina</span>
         </button>
+        
+        {isManagement && onBackToAdmin && (
+           <button onClick={onBackToAdmin} className="flex flex-col items-center gap-1 text-[#5856D6]">
+             <Sliders size={24} />
+             <span className="text-[10px] font-bold">Admin</span>
+           </button>
+        )}
+
         <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
           <Settings size={24} />
           <span className="text-[10px] font-bold">Impostazioni</span>

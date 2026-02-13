@@ -24,9 +24,10 @@ interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
   onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications') => void;
+  onGoToOrder: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavigate }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavigate, onGoToOrder }) => {
   const [currentDay, setCurrentDay] = useState<Day | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +127,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
             </div>
           </Card>
         )}
+
+        {/* Pulsante Ordina per Admin/Supervisor */}
+        <Card className="p-4 border-l-4 border-[#FF9500] bg-orange-50/30">
+           <div className="flex justify-between items-center">
+             <div className="flex items-center gap-3">
+               <div className="p-2 bg-orange-100 text-orange-600 rounded-full">
+                 <PizzaIcon size={24} />
+               </div>
+               <div>
+                 <p className="text-[10px] font-bold text-[#8E8E93] uppercase">Sezione Personale</p>
+                 <p className="text-sm font-bold">Prenota la tua pizza oggi</p>
+               </div>
+             </div>
+             <Button onClick={onGoToOrder} size="sm" className="!py-2">
+               Vai al Menu
+             </Button>
+           </div>
+        </Card>
 
         <Card className="p-4 border-l-4 border-[#5856D6]">
           <div className="flex justify-between items-center">

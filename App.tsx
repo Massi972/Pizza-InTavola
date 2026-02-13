@@ -18,7 +18,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
-  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order'>('dashboard');
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
@@ -67,18 +67,26 @@ const App: React.FC = () => {
     return <LoginView onLogin={handleLogin} />;
   }
 
+  // Se l'utente è un semplice Worker, vede solo la dashboard ordini
+  if (auth.user.role === Role.WORKER) {
+    return <WorkerDashboard user={auth.user} onLogout={handleLogout} />;
+  }
+
+  // Se l'utente è ADMIN o SUPERVISOR, ha accesso a tutto
   return (
     <div className="bg-[#F2F2F7] min-h-screen">
-      {auth.user?.role === Role.ADMIN || auth.user?.role === Role.SUPERVISOR ? (
-        <>
-          {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
-          {view === 'users' && <AdminUsers onBack={() => setView('dashboard')} />}
-          {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
-          {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
-          {view === 'dashboard' && <AdminDashboard user={auth.user!} onLogout={handleLogout} onNavigate={(v: any) => setView(v)} />}
-        </>
-      ) : (
-        <WorkerDashboard user={auth.user!} onLogout={handleLogout} />
+      {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
+      {view === 'users' && <AdminUsers onBack={() => setView('dashboard')} />}
+      {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
+      {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
+      {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
+      {view === 'dashboard' && (
+        <AdminDashboard 
+          user={auth.user} 
+          onLogout={handleLogout} 
+          onNavigate={(v: any) => setView(v)} 
+          onGoToOrder={() => setView('order')}
+        />
       )}
 
       {showBiometricPrompt && isBiometricSupported && (
