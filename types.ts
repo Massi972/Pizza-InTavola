@@ -12,7 +12,8 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string; // Nuovo campo per WhatsApp
+  phone: string; 
+  phone_e164?: string; // Formato internazionale per WhatsApp
   pin: string;
   role: Role;
   active: boolean;

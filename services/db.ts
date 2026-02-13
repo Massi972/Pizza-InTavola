@@ -19,7 +19,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export interface GlobalSettings {
   master_code: string;
   override_cutoff: boolean;
-  manager_phone?: string; // Numero a cui i dipendenti chiedono aiuto
+  manager_phone?: string; 
 }
 
 class DB {
@@ -43,14 +43,6 @@ class DB {
     return settings.master_code;
   }
 
-  async updateMasterCode(newCode: string): Promise<void> {
-    await this.updateSettings({ master_code: newCode });
-  }
-
-  async updateOverrideCutoff(value: boolean): Promise<void> {
-    await this.updateSettings({ override_cutoff: value });
-  }
-
   async getUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('*').order('last_name', { ascending: true });
     if (error) throw error;
@@ -60,6 +52,7 @@ class DB {
       lastName: u.last_name, 
       email: u.email || '', 
       phone: u.phone || '',
+      phone_e164: u.phone_e164 || u.phone || '',
       pin: u.pin, 
       role: u.role, 
       active: u.active 
@@ -76,6 +69,7 @@ class DB {
       lastName: data.last_name, 
       email: data.email || '',
       phone: data.phone || '',
+      phone_e164: data.phone_e164 || data.phone || '',
       pin: data.pin, 
       role: data.role, 
       active: data.active 
@@ -99,7 +93,8 @@ class DB {
       first_name: user.firstName, 
       last_name: user.lastName, 
       email: user.email?.toLowerCase().trim(), 
-      phone: user.phone?.replace(/\s/g, ''), // Rimuove spazi dal numero
+      phone: user.phone?.replace(/\s/g, ''),
+      phone_e164: user.phone_e164?.replace(/\s/g, ''),
       pin: user.pin, 
       role: user.role, 
       active: user.active 
@@ -117,19 +112,6 @@ class DB {
   async deleteUser(id: string): Promise<void> {
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw error;
-  }
-
-  // Il recupero email lo manteniamo come fallback ma puntiamo su WhatsApp
-  async recoverPin(email: string): Promise<{ success: boolean; message?: string }> {
-    try {
-      const { error } = await supabase.functions.invoke('recover-pin', {
-        body: { email: email.toLowerCase().trim() }
-      });
-      if (error) return { success: false, message: 'Servizio email non disponibile.' };
-      return { success: true };
-    } catch (err) {
-      return { success: false };
-    }
   }
 
   async getPizzas(): Promise<Pizza[]> {

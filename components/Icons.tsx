@@ -20,7 +20,11 @@ import {
   AlertCircle,
   X,
   FileText,
-  Table as TableIcon
+  Table as TableIcon,
+  Copy,
+  MessageCircle,
+  RefreshCw,
+  Key
 } from 'lucide-react';
 
 export {
@@ -43,5 +47,9 @@ export {
   AlertCircle,
   X,
   FileText,
-  TableIcon
+  TableIcon,
+  Copy,
+  MessageCircle,
+  RefreshCw,
+  Key
 };

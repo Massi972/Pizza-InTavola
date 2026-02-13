@@ -4,7 +4,7 @@ import { User, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X, Lock, AlertCircle, Check } from '../components/Icons';
+import { Plus, Edit2, Trash2, X, Lock, AlertCircle, Check, Copy, MessageCircle, Key, RefreshCw } from '../components/Icons';
 
 interface AdminUsersProps {
   onBack: () => void;
@@ -13,10 +13,11 @@ interface AdminUsersProps {
 const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [editing, setEditing] = useState<Partial<User> | null>(null);
+  const [successUser, setSuccessUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [showSqlHint, setShowSqlHint] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -34,15 +35,54 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     fetchUsers();
   }, []);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const getPINMessage = (user: User) => {
+    return `Ciao! Sono InTavola SRL. Questo è il tuo codice strettamente personale: ${user.pin}. Non condividerlo.`;
+  };
+
+  const copyToClipboard = async (user: User) => {
+    const msg = getPINMessage(user);
+    try {
+      await navigator.clipboard.writeText(msg);
+      showToast("Copiato ✅");
+    } catch (err) {
+      alert("Errore nella copia");
+    }
+  };
+
+  const sendWhatsApp = (user: User) => {
+    const phone = user.phone_e164 || user.phone || '';
+    if (!phone) {
+      alert("Numero di telefono mancante!");
+      return;
+    }
+    const cleanPhone = phone.replace('+', '').replace(/\s/g, '');
+    const msg = encodeURIComponent(getPINMessage(user));
+    window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+  };
+
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin) {
-      setError('Nome, Cognome e PIN sono obbligatori');
+    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.phone_e164) {
+      setError('Tutti i campi (Nome, Cognome, Telefono e PIN) sono obbligatori');
       return;
     }
     
+    if (!editing.phone_e164.startsWith('+')) {
+      setError('Il numero deve iniziare con + (formato internazionale)');
+      return;
+    }
+
+    if (editing.pin.length < 4 || editing.pin.length > 6 || !/^\d+$/.test(editing.pin)) {
+      setError('Il PIN deve essere composto da 4-6 cifre numeriche');
+      return;
+    }
+
     setSaving(true);
     setError('');
-    setShowSqlHint(false);
     
     try {
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
@@ -54,45 +94,28 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
 
       await db.saveUser(editing);
       await fetchUsers();
+      
+      // Mostra overlay di successo con opzioni di condivisione
+      setSuccessUser({ ...editing as User });
       setEditing(null);
     } catch (err: any) {
-      const msg = err.message || "";
-      setError(msg);
-      if (msg.toLowerCase().includes('column "phone"') || msg.includes('schema cache')) {
-        setShowSqlHint(true);
-      }
+      setError(err.message || "Errore nel salvataggio");
     } finally {
       setSaving(false);
     }
   };
 
-  const sendPinViaWhatsApp = (user: User) => {
-    if (!user.phone) {
-      alert("Nessun numero di telefono salvato per questo dipendente");
-      return;
-    }
-    const message = `Ciao ${user.firstName}, il tuo PIN personale per ordinare la pizza su Pizza InTavola è: *${user.pin}* 🍕`;
-    const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/${user.phone}?text=${encoded}`, '_blank');
-  };
-
-  const generatePin = async () => {
-    let pin = '';
-    let isUnique = false;
-    let attempts = 0;
-    while (!isUnique && attempts < 10) {
-      pin = Math.floor(1000 + Math.random() * 9000).toString();
-      isUnique = await db.isPinAvailable(pin, editing?.id);
-      attempts++;
-    }
-    setEditing(prev => prev ? { ...prev, pin } : null);
-  };
-
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-black/80 text-white px-4 py-2 rounded-full text-sm font-bold animate-in fade-in zoom-in duration-200">
+          {toast}
+        </div>
+      )}
+
       <div className="space-y-4">
-        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, email: '', phone: '' }); setError(''); setShowSqlHint(false); }}>
-          <Plus size={20} /> Aggiungi Dipendente
+        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, phone_e164: '+39' }); setError(''); }}>
+          <Plus size={20} /> Nuovo Dipendente
         </Button>
 
         {loading ? (
@@ -114,7 +137,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => { setEditing(u); setError(''); setShowSqlHint(false); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
+                    <button onClick={() => { setEditing(u); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                       <Edit2 size={16} />
                     </button>
                     <button onClick={() => db.deleteUser(u.id).then(fetchUsers)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
@@ -124,18 +147,15 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-[#8E8E93]">
-                      <Lock size={12} />
-                      <span className="text-xs font-mono font-bold tracking-widest">{u.pin}</span>
-                    </div>
-                    {u.phone && (
-                      <button 
-                        onClick={() => sendPinViaWhatsApp(u)}
-                        className="flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm active:scale-95"
-                      >
-                        Invia PIN WhatsApp
-                      </button>
-                    )}
+                    <span className="text-xs font-bold text-green-600 flex items-center gap-1">
+                      <Check size={14} /> PIN impostato ✅
+                    </span>
+                    <button 
+                      onClick={() => { setEditing({ ...u, pin: '' }); setError(''); }}
+                      className="text-[10px] bg-[#F2F2F7] px-2 py-1 rounded-full font-bold uppercase flex items-center gap-1"
+                    >
+                      <RefreshCw size={10} /> Rigenera
+                    </button>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {u.active ? 'ATTIVO' : 'SOSPESO'}
@@ -147,97 +167,108 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
         )}
       </div>
 
+      {/* Form Creazione/Modifica */}
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditing(null)} />
           <div className="relative bg-white rounded-t-[32px] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">{editing.id ? 'Modifica Dipendente' : 'Nuovo Dipendente'}</h2>
+              <h2 className="text-xl font-bold">{editing.id ? 'Imposta Nuovo PIN' : 'Nuovo Dipendente'}</h2>
               <button onClick={() => setEditing(null)} className="p-2 bg-[#F2F2F7] rounded-full">
                 <X size={20} />
               </button>
             </div>
 
             {error && (
-              <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col gap-2 text-[#FF3B30] text-sm animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center gap-3 font-bold">
-                  <AlertCircle size={20} className="shrink-0" />
-                  <span className="flex-1">{error}</span>
-                </div>
-                {showSqlHint && (
-                  <div className="mt-2 p-3 bg-white/50 rounded-lg border border-red-200">
-                    <p className="text-[11px] font-bold uppercase text-red-800 mb-1">Soluzione Database:</p>
-                    <code className="block bg-black text-white p-2 rounded text-[10px] font-mono break-all">
-                      ALTER TABLE users ADD COLUMN phone TEXT;
-                    </code>
-                  </div>
-                )}
+              <div className="bg-red-50 p-3 rounded-xl border border-red-100 flex items-center gap-2 text-[#FF3B30] text-xs font-bold animate-in fade-in duration-200">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Nome</label>
-                  <Input value={editing.firstName || ''} onChange={e => { setError(''); setEditing({...editing, firstName: e.target.value}); }} />
+                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Nome</label>
+                  <Input value={editing.firstName || ''} onChange={e => setEditing({...editing, firstName: e.target.value})} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Cognome</label>
-                  <Input value={editing.lastName || ''} onChange={e => { setError(''); setEditing({...editing, lastName: e.target.value}); }} />
+                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Cognome</label>
+                  <Input value={editing.lastName || ''} onChange={e => setEditing({...editing, lastName: e.target.value})} />
                 </div>
               </div>
               
               <div>
-                <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (con prefisso, es: 39333...)</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (es. +39333...)</label>
                 <Input 
-                  placeholder="393330000000"
-                  value={editing.phone || ''} 
-                  onChange={e => { setError(''); setEditing({...editing, phone: e.target.value}); }} 
+                  placeholder="+39..."
+                  value={editing.phone_e164 || ''} 
+                  onChange={e => setEditing({...editing, phone_e164: e.target.value})} 
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">Ruolo</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">PIN (4-6 cifre)</label>
+                <Input 
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Inserisci PIN"
+                  value={editing.pin || ''} 
+                  onChange={e => setEditing({...editing, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})} 
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Ruolo</label>
                 <select 
-                  className="w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] outline-none"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] outline-none text-sm"
                   value={editing.role}
                   onChange={e => setEditing({...editing, role: e.target.value as Role})}
                 >
                   <option value={Role.WORKER}>Worker (Dipendente)</option>
-                  <option value={Role.SUPERVISOR}>Supervisor (Solo Lettura)</option>
+                  <option value={Role.SUPERVISOR}>Supervisor (Sola Lettura)</option>
                   <option value={Role.ADMIN}>Admin (Completo)</option>
                 </select>
               </div>
-
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="text-xs font-bold text-[#8E8E93] uppercase pl-1">PIN Personale</label>
-                  <Input 
-                    placeholder="4-6 cifre"
-                    value={editing.pin || ''} 
-                    onChange={e => { setError(''); setEditing({...editing, pin: e.target.value}); }} 
-                  />
-                </div>
-                <Button variant="secondary" onClick={generatePin} className="!py-[14px]">
-                  Genera
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2 p-1">
-                <input 
-                  id="user-active"
-                  type="checkbox" 
-                  className="w-5 h-5 accent-[#007AFF]"
-                  checked={editing.active ?? true} 
-                  onChange={e => setEditing({...editing, active: e.target.checked})}
-                />
-                <label htmlFor="user-active" className="text-sm font-medium">Utente Attivo</label>
-              </div>
             </div>
 
-            <Button fullWidth onClick={handleSave} disabled={saving || !editing.pin}>
-              {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva Dipendente'}
+            <Button fullWidth onClick={handleSave} disabled={saving}>
+              {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva e Invia PIN'}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Overlay Successo / Condivisione */}
+      {successUser && (
+        <div className="fixed inset-0 z-[60] flex flex-col justify-center items-center p-6">
+          <div className="absolute inset-0 bg-[#007AFF]/95 backdrop-blur-md" />
+          <div className="relative w-full max-w-sm bg-white rounded-[32px] p-8 text-center space-y-6 shadow-2xl animate-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
+              <Check size={40} />
+            </div>
+            
+            <div>
+              <h2 className="text-2xl font-black tracking-tight">PIN Salvato!</h2>
+              <p className="text-[#8E8E93] text-sm mt-1">Consegna le credenziali a <span className="text-black font-bold">{successUser.firstName}</span></p>
+            </div>
+
+            <div className="bg-[#F2F2F7] p-4 rounded-2xl">
+              <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1">Codice Personale</p>
+              <p className="text-3xl font-mono font-black tracking-[0.2em]">{successUser.pin}</p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Button fullWidth className="!bg-[#25D366]" onClick={() => sendWhatsApp(successUser)}>
+                <MessageCircle size={20} /> Invia su WhatsApp
+              </Button>
+              <Button fullWidth variant="secondary" onClick={() => copyToClipboard(successUser)}>
+                <Copy size={20} /> Copia Messaggio
+              </Button>
+              <Button fullWidth variant="ghost" onClick={() => setSuccessUser(null)}>
+                Ho finito
+              </Button>
+            </div>
           </div>
         </div>
       )}
