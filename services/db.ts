@@ -2,6 +2,27 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification } from '../types';
 
+/**
+ * SCHEMA SQL SUGGERITO (da eseguire nel pannello SQL di Supabase):
+ * 
+ * -- 1. Tabella Modifiche
+ * CREATE TABLE modifications (
+ *   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   name TEXT NOT NULL,
+ *   type TEXT CHECK (type IN ('ADD', 'REMOVE')),
+ *   active BOOLEAN DEFAULT true,
+ *   sort_order INT DEFAULT 0,
+ *   created_at TIMESTAMPTZ DEFAULT now()
+ * );
+ * 
+ * -- 2. Aggiornamento Ordini
+ * ALTER TABLE orders ADD COLUMN add_modification_id UUID REFERENCES modifications(id) ON DELETE SET NULL;
+ * ALTER TABLE orders ADD COLUMN remove_modification_id UUID REFERENCES modifications(id) ON DELETE SET NULL;
+ * 
+ * -- 3. Vincolo Unicità Ordine (fondamentale per UPSERT)
+ * ALTER TABLE orders ADD CONSTRAINT unique_day_user UNIQUE (day_id, user_id);
+ */
+
 const getEnvVar = (name: string, fallback: string): string => {
   try {
     const env = (import.meta as any).env;
@@ -23,24 +44,34 @@ export interface GlobalSettings {
 }
 
 class DB {
+  private async handleError(error: any, context: string) {
+    console.error(`Error in ${context}:`, error);
+    const msg = error.message || "Errore sconosciuto";
+    throw new Error(`${context}: ${msg}`);
+  }
+
   async getSettings(): Promise<GlobalSettings> {
-    const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-    if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' }; 
-    return {
-      master_code: data.master_code,
-      override_cutoff: !!data.override_cutoff,
-      manager_phone: data.manager_phone || ''
-    };
+    try {
+      const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
+      if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' }; 
+      return {
+        master_code: data.master_code,
+        override_cutoff: !!data.override_cutoff,
+        manager_phone: data.manager_phone || ''
+      };
+    } catch {
+      return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' };
+    }
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
-    if (error) throw error;
+    if (error) await this.handleError(error, "Aggiornamento impostazioni");
   }
 
   async getUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('*').order('last_name', { ascending: true });
-    if (error) throw error;
+    if (error) await this.handleError(error, "Caricamento utenti");
     return data.map(u => ({ 
       id: u.id, 
       firstName: u.first_name, 
@@ -86,23 +117,20 @@ class DB {
       role: user.role, 
       active: user.active 
     };
-    if (user.id) {
-      const { error } = await supabase.from('users').update(payload).eq('id', user.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from('users').insert([payload]);
-      if (error) throw error;
-    }
+    const { error } = user.id 
+      ? await supabase.from('users').update(payload).eq('id', user.id)
+      : await supabase.from('users').insert([payload]);
+    if (error) await this.handleError(error, "Salvataggio utente");
   }
 
   async deleteUser(id: string): Promise<void> {
     const { error } = await supabase.from('users').delete().eq('id', id);
-    if (error) throw error;
+    if (error) await this.handleError(error, "Cancellazione utente");
   }
 
   async getPizzas(): Promise<Pizza[]> {
     const { data, error } = await supabase.from('pizzas').select('*').order('name', { ascending: true });
-    if (error) throw error;
+    if (error) await this.handleError(error, "Caricamento pizze");
     return data.map(p => ({ 
       id: p.id, 
       name: p.name, 
@@ -117,62 +145,61 @@ class DB {
   async savePizza(pizza: Partial<Pizza>): Promise<void> {
     const payload = { 
       name: pizza.name, 
-      description: pizza.description, 
-      ingredients: pizza.ingredients, 
-      allergens: pizza.allergens, 
-      active: pizza.active, 
-      is_vegetarian: pizza.isVegetarian 
+      description: pizza.description || '', 
+      ingredients: pizza.ingredients || [], 
+      allergens: pizza.allergens || [], 
+      active: pizza.active !== false, 
+      is_vegetarian: pizza.isVegetarian || false 
     };
-    if (pizza.id) {
-      const { error } = await supabase.from('pizzas').update(payload).eq('id', pizza.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from('pizzas').insert([payload]);
-      if (error) throw error;
-    }
+    const { error } = pizza.id
+      ? await supabase.from('pizzas').update(payload).eq('id', pizza.id)
+      : await supabase.from('pizzas').insert([payload]);
+    if (error) await this.handleError(error, "Salvataggio pizza");
   }
 
   async deletePizza(id: string): Promise<void> {
     const { error } = await supabase.from('pizzas').delete().eq('id', id);
-    if (error) throw error;
+    if (error) await this.handleError(error, "Cancellazione pizza");
   }
 
   async getModifications(): Promise<Modification[]> {
-    const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
-    if (error) throw error;
-    return data.map(m => ({
-      id: m.id,
-      name: m.name,
-      type: m.type as 'ADD' | 'REMOVE',
-      active: m.active,
-      sort_order: m.sort_order
-    }));
+    try {
+      const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data.map(m => ({
+        id: m.id,
+        name: m.name,
+        type: m.type as 'ADD' | 'REMOVE',
+        active: m.active,
+        sort_order: m.sort_order
+      }));
+    } catch (err) {
+      console.warn("Tabella modifications non trovata o errore query:", err);
+      return []; // Ritorna lista vuota invece di bloccare tutto
+    }
   }
 
   async saveModification(mod: Partial<Modification>): Promise<void> {
     const payload = {
       name: mod.name,
       type: mod.type,
-      active: mod.active,
-      sort_order: mod.sort_order
+      active: mod.active !== false,
+      sort_order: mod.sort_order || 0
     };
-    if (mod.id) {
-      const { error } = await supabase.from('modifications').update(payload).eq('id', mod.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from('modifications').insert([payload]);
-      if (error) throw error;
-    }
+    const { error } = mod.id
+      ? await supabase.from('modifications').update(payload).eq('id', mod.id)
+      : await supabase.from('modifications').insert([payload]);
+    if (error) await this.handleError(error, "Salvataggio variante");
   }
 
   async deleteModification(id: string): Promise<void> {
     const { error } = await supabase.from('modifications').delete().eq('id', id);
-    if (error) throw error;
+    if (error) await this.handleError(error, "Cancellazione variante");
   }
 
   async getDays(): Promise<Day[]> {
     const { data, error } = await supabase.from('days').select('*').order('date', { ascending: false });
-    if (error) throw error;
+    if (error) await this.handleError(error, "Caricamento giorni");
     return data.map(d => ({ 
       id: d.id, 
       date: d.date, 
@@ -202,7 +229,7 @@ class DB {
       status: 'OPEN', 
       opened_at: new Date().toISOString() 
     }, { onConflict: 'date' }).select().single();
-    if (error) throw error;
+    if (error) await this.handleError(error, "Apertura giornata");
     return { 
       id: data.id, 
       date: data.date, 
@@ -218,13 +245,13 @@ class DB {
       status: 'CLOSED', 
       closed_at: new Date().toISOString() 
     }).eq('date', today);
-    if (error) throw error;
+    if (error) await this.handleError(error, "Chiusura giornata");
   }
 
   async getOrdersByDay(dayId: string): Promise<Order[]> {
     const { data, error } = await supabase.from('orders').select('*').eq('day_id', dayId);
-    if (error) throw error;
-    return data.map(o => ({ 
+    if (error) await this.handleError(error, "Caricamento ordini");
+    return (data || []).map(o => ({ 
       id: o.id, 
       dayId: o.day_id, 
       userId: o.user_id, 
@@ -263,13 +290,15 @@ class DB {
       user_id: order.userId, 
       pizza_id: order.pizzaId, 
       slot_time: order.slotTime, 
-      add_modification_id: order.addModificationId || null,
-      remove_modification_id: order.removeModificationId || null,
+      add_modification_id: order.addModificationId || null, // Importante: null invece di ""
+      remove_modification_id: order.removeModificationId || null, // Importante: null invece di ""
       note: order.note || '',
       updated_at: new Date().toISOString() 
     };
+    
+    // NOTA: Richiede un vincolo di unicità su (day_id, user_id) nella tabella orders
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
-    if (error) throw error;
+    if (error) await this.handleError(error, "Salvataggio ordine");
   }
 }
 

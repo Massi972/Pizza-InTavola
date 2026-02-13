@@ -79,12 +79,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           db.getSettings()
         ]);
         setPizzas(pizzaList.filter(p => p.active));
-        setModifications(modList);
+        setModifications(modList || []);
         setCurrentDay(day);
         setMyOrder(order);
         setOverrideActive(settings.override_cutoff);
-      } catch (err) {
-        setMessage({ text: "Errore caricamento dati", type: "error" });
+      } catch (err: any) {
+        setMessage({ text: err.message || "Errore nel caricamento dei dati", type: "error" });
       } finally {
         setLoading(false);
       }
@@ -106,9 +106,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         localStorage.setItem('pizzastaff_biometric_enabled', 'true');
         localStorage.removeItem('pizzastaff_biometric_declined');
         setBiometricEnabled(true);
-        setMessage({ text: "Configurazione Face ID / Touch ID riuscita!", type: "success" });
+        setMessage({ text: "Face ID / Touch ID attivato!", type: "success" });
       } else {
-        setMessage({ text: "Operazione annullata o non supportata", type: "error" });
+        setMessage({ text: "Operazione annullata", type: "error" });
       }
       setSubmitting(false);
     }
@@ -125,8 +125,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
-        addModificationId: addModId,
-        removeModificationId: removeModId,
+        addModificationId: addModId || null,
+        removeModificationId: removeModId || null,
         note: ''
       };
       await db.saveOrder(order);
@@ -138,8 +138,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
       setIsEditing(false);
       setMessage({ text: "Ordine inviato con successo!", type: "success" });
       setTimeout(() => setMessage(null), 3000);
-    } catch (err) {
-      setMessage({ text: "Errore durante il salvataggio", type: "error" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Errore durante il salvataggio", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -180,12 +180,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
                 <div className="mt-1 space-y-0.5">
                   {myOrder.addModificationId && (
                     <p className="text-[10px] text-green-600 font-bold uppercase tracking-tight">
-                      + {modifications.find(m => m.id === myOrder.addModificationId)?.name}
+                      + {modifications.find(m => m.id === myOrder.addModificationId)?.name || 'Variante'}
                     </p>
                   )}
                   {myOrder.removeModificationId && (
                     <p className="text-[10px] text-red-500 font-bold uppercase tracking-tight">
-                      - {modifications.find(m => m.id === myOrder.removeModificationId)?.name}
+                      - {modifications.find(m => m.id === myOrder.removeModificationId)?.name || 'Variante'}
                     </p>
                   )}
                 </div>
