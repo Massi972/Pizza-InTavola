@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User } from '../types';
-import { Fingerprint } from '../components/Icons';
+import { Fingerprint, PizzaIcon } from '../components/Icons';
 import { isBiometricAvailable, verifyBiometrics } from '../services/biometrics';
 
 interface LoginProps {
@@ -80,9 +80,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const newPin = pin + d;
       setPin(newPin);
       setError('');
-      if (newPin.length >= 4) {
-        // Opzionale: invio automatico al raggiungimento di 4 cifre
-      }
     }
   };
 
@@ -147,16 +144,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
       <div className="w-full max-w-xs flex flex-col items-center gap-10">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-24 h-24 bg-white rounded-[28px] flex items-center justify-center shadow-2xl p-4">
-             <img 
-               src="https://raw.githubusercontent.com/google/material-design-icons/master/png/maps/local_pizza/black/48dp/2x/local_pizza_black_48dp.png" 
-               alt="Logo" 
-               className="w-full h-full object-contain opacity-80" 
-             />
+          {/* Logo in stile iOS App Icon */}
+          <div className="w-24 h-24 bg-white rounded-[22%] flex items-center justify-center shadow-2xl overflow-hidden relative group">
+             <div className="absolute inset-0 bg-gradient-to-br from-[#FF9500] to-[#FF3B30]" />
+             <PizzaIcon size={56} className="text-white relative z-10 drop-shadow-lg" strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black tracking-tight">Staff InTavola</h1>
-            <p className="text-[#8E8E93] text-xs font-bold uppercase tracking-widest mt-1">Area Dipendenti</p>
+            <h1 className="text-2xl font-black tracking-tight text-[#1c1c1e]">Staff InTavola</h1>
+            <p className="text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.2em] mt-1">Prenotazione Interna</p>
           </div>
         </div>
 
@@ -164,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {error && <p className="text-center text-sm font-bold mb-6 text-[#FF3B30] animate-bounce">{error}</p>}
           {renderNumpad()}
           <p className="text-center mt-12 text-[9px] font-bold text-[#C6C6C8] uppercase tracking-[0.1em] max-w-[200px] leading-relaxed">
-            In caso di smarrimento del PIN rivolgersi al responsabile.
+            Inserisci il tuo PIN per accedere al menu e ordinare la tua pizza quotidiana.
           </p>
         </div>
       </div>
