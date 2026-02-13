@@ -12,7 +12,7 @@ export interface User {
   firstName: string;
   lastName: string;
   email?: string;
-  phone_e164: string; // Formato internazionale obbligatorio es. +39...
+  phone_e164: string;
   pin: string;
   role: Role;
   active: boolean;
@@ -28,6 +28,14 @@ export interface Pizza {
   isVegetarian?: boolean;
 }
 
+export interface Modification {
+  id: string;
+  name: string;
+  type: 'ADD' | 'REMOVE';
+  active: boolean;
+  sort_order?: number;
+}
+
 export enum DayStatus {
   OPEN = 'OPEN',
   CLOSED = 'CLOSED'
@@ -35,7 +43,7 @@ export enum DayStatus {
 
 export interface Day {
   id: string;
-  date: string; // ISO Date YYYY-MM-DD
+  date: string;
   status: DayStatus;
   openedAt: string;
   closedAt?: string;
@@ -47,7 +55,9 @@ export interface Order {
   userId: string;
   pizzaId: string;
   slotTime: SlotTime;
-  note: string;
+  addModificationId?: string | null;
+  removeModificationId?: string | null;
+  note: string; // Mantenuto per compatibilità, ma non più usato dai worker
   createdAt: string;
   updatedAt: string;
 }

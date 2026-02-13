@@ -8,6 +8,7 @@ import AdminDashboard from './views/AdminDashboard';
 import AdminPizzas from './views/AdminPizzas';
 import AdminUsers from './views/AdminUsers';
 import AdminHistory from './views/AdminHistory';
+import AdminModifications from './views/AdminModifications';
 import { Fingerprint, X } from './components/Icons';
 import { Button } from './components/UI';
 
@@ -17,7 +18,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
-  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications'>('dashboard');
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
@@ -73,6 +74,7 @@ const App: React.FC = () => {
           {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
           {view === 'users' && <AdminUsers onBack={() => setView('dashboard')} />}
           {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
+          {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
           {view === 'dashboard' && <AdminDashboard user={auth.user!} onLogout={handleLogout} onNavigate={(v: any) => setView(v)} />}
         </>
       ) : (

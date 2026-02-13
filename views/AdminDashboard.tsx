@@ -14,14 +14,15 @@ import {
   Check, 
   AlertCircle, 
   X,
-  Fingerprint
+  Fingerprint,
+  Sliders
 } from '../components/Icons';
 import { formatDate } from '../services/utils';
 
 interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
-  onNavigate: (view: 'pizzas' | 'users' | 'history') => void;
+  onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications') => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavigate }) => {
@@ -30,8 +31,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
-  const [isEditingCode, setIsEditingCode] = useState(false);
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [error, setError] = useState<{message: string, code?: string} | null>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_biometric_enabled') === 'true');
   const [toast, setToast] = useState<string | null>(null);
@@ -89,21 +88,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
     setTimeout(() => setToast(null), 2000);
   };
 
-  const updateSetting = async (key: keyof GlobalSettings, value: any) => {
-    if (!settings) return;
-    setActionLoading(true);
-    try {
-      await db.updateSettings({ [key]: value });
-      setSettings({ ...settings, [key]: value });
-      setIsEditingCode(false);
-      setIsEditingPhone(false);
-    } catch (err: any) {
-      setError({ message: err.message || "Errore salvataggio.", code: err.code });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const isReadOnly = user.role === Role.SUPERVISOR;
 
   if (loading && !error) {
@@ -123,7 +107,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       )}
 
       <div className="space-y-6">
-        {/* Gestione Biometria */}
         <Card className="p-4 border-l-4 border-[#5856D6]">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -188,6 +171,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
 
         <div className="space-y-2">
           <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start"><PizzaIcon size={18} /> Menu Pizze</Button>
+          <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start"><Sliders size={18} /> Variazioni</Button>
           <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start"><UsersIcon size={18} /> Dipendenti</Button>
           <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start"><History size={18} /> Storico</Button>
         </div>

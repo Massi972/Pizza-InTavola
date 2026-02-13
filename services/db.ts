@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { User, Pizza, Order, Day, DayStatus, SlotTime } from '../types';
+import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification } from '../types';
 
 const getEnvVar = (name: string, fallback: string): string => {
   try {
@@ -36,11 +36,6 @@ class DB {
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
     if (error) throw error;
-  }
-
-  async getMasterCode(): Promise<string> {
-    const settings = await this.getSettings();
-    return settings.master_code;
   }
 
   async getUsers(): Promise<User[]> {
@@ -91,7 +86,6 @@ class DB {
       role: user.role, 
       active: user.active 
     };
-    
     if (user.id) {
       const { error } = await supabase.from('users').update(payload).eq('id', user.id);
       if (error) throw error;
@@ -140,6 +134,39 @@ class DB {
 
   async deletePizza(id: string): Promise<void> {
     const { error } = await supabase.from('pizzas').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async getModifications(): Promise<Modification[]> {
+    const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
+    if (error) throw error;
+    return data.map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.type as 'ADD' | 'REMOVE',
+      active: m.active,
+      sort_order: m.sort_order
+    }));
+  }
+
+  async saveModification(mod: Partial<Modification>): Promise<void> {
+    const payload = {
+      name: mod.name,
+      type: mod.type,
+      active: mod.active,
+      sort_order: mod.sort_order
+    };
+    if (mod.id) {
+      const { error } = await supabase.from('modifications').update(payload).eq('id', mod.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('modifications').insert([payload]);
+      if (error) throw error;
+    }
+  }
+
+  async deleteModification(id: string): Promise<void> {
+    const { error } = await supabase.from('modifications').delete().eq('id', id);
     if (error) throw error;
   }
 
@@ -202,8 +229,10 @@ class DB {
       dayId: o.day_id, 
       userId: o.user_id, 
       pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime, 
-      note: o.note, 
+      slotTime: o.slot_time as SlotTime,
+      addModificationId: o.add_modification_id,
+      removeModificationId: o.remove_modification_id,
+      note: o.note || '', 
       createdAt: o.created_at, 
       updatedAt: o.updated_at 
     }));
@@ -219,8 +248,10 @@ class DB {
       dayId: data.day_id, 
       userId: data.user_id, 
       pizzaId: data.pizza_id, 
-      slotTime: data.slot_time as SlotTime, 
-      note: data.note, 
+      slotTime: data.slot_time as SlotTime,
+      addModificationId: data.add_modification_id,
+      removeModificationId: data.remove_modification_id,
+      note: data.note || '', 
       createdAt: data.created_at, 
       updatedAt: data.updated_at 
     };
@@ -232,7 +263,9 @@ class DB {
       user_id: order.userId, 
       pizza_id: order.pizzaId, 
       slot_time: order.slotTime, 
-      note: order.note, 
+      add_modification_id: order.addModificationId || null,
+      remove_modification_id: order.removeModificationId || null,
+      note: order.note || '',
       updated_at: new Date().toISOString() 
     };
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });

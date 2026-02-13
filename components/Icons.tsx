@@ -27,7 +27,9 @@ import {
   Key,
   Fingerprint,
   Settings,
-  User as UserIcon
+  User as UserIcon,
+  Sliders,
+  Filter
 } from 'lucide-react';
 
 export {
@@ -57,5 +59,7 @@ export {
   Key,
   Fingerprint,
   Settings,
-  UserIcon
+  UserIcon,
+  Sliders,
+  Filter
 };

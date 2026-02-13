@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Pizza, Order, SlotTime, DayStatus } from '../types';
+import { User, Pizza, Order, SlotTime, DayStatus, Modification } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, SegmentedControl, Input } from '../components/UI';
@@ -33,13 +33,15 @@ type ViewState = 'menu' | 'settings';
 const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<ViewState>('menu');
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
+  const [modifications, setModifications] = useState<Modification[]>([]);
   const [currentDay, setCurrentDay] = useState<any>(null);
   const [overrideActive, setOverrideActive] = useState(false);
   const [myOrder, setMyOrder] = useState<Order | null>(null);
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
   const [slot, setSlot] = useState<SlotTime>('18:00');
-  const [note, setNote] = useState('');
+  const [addModId, setAddModId] = useState<string | null>(null);
+  const [removeModId, setRemoveModId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +49,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
   
   const [isBioSupported, setIsBioSupported] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_biometric_enabled') === 'true');
+
+  const addOptions = modifications.filter(m => m.type === 'ADD' && m.active);
+  const removeOptions = modifications.filter(m => m.type === 'REMOVE' && m.active);
 
   useEffect(() => {
     const checkBio = async () => {
@@ -66,13 +71,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [pizzaList, day, order, settings] = await Promise.all([
+        const [pizzaList, modList, day, order, settings] = await Promise.all([
           db.getPizzas(),
+          db.getModifications(),
           db.getCurrentDay(),
           db.getUserOrderToday(user.id),
           db.getSettings()
         ]);
         setPizzas(pizzaList.filter(p => p.active));
+        setModifications(modList);
         setCurrentDay(day);
         setMyOrder(order);
         setOverrideActive(settings.override_cutoff);
@@ -87,13 +94,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
   const handleToggleBiometrics = async () => {
     if (biometricEnabled) {
-      // Disattiva
       localStorage.removeItem('pizzastaff_stored_pin');
       localStorage.setItem('pizzastaff_biometric_enabled', 'false');
       setBiometricEnabled(false);
       setMessage({ text: "Accesso biometrico disattivato", type: "success" });
     } else {
-      // Attiva REALE
       setSubmitting(true);
       const success = await registerBiometrics(user.id, `${user.firstName} ${user.lastName}`);
       if (success) {
@@ -120,13 +125,16 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
-        note: note
+        addModificationId: addModId,
+        removeModificationId: removeModId,
+        note: ''
       };
       await db.saveOrder(order);
       const updatedOrder = await db.getUserOrderToday(user.id);
       setMyOrder(updatedOrder);
       setSelectedPizza(null);
-      setNote('');
+      setAddModId(null);
+      setRemoveModId(null);
       setIsEditing(false);
       setMessage({ text: "Ordine inviato con successo!", type: "success" });
       setTimeout(() => setMessage(null), 3000);
@@ -153,7 +161,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
     return (
       <div className="space-y-6">
-        {/* Banner Stato */}
         {!canOrder && currentDay && (
           <div className="bg-[#FF3B30] text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg">
             <Lock size={24} />
@@ -164,13 +171,24 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           </div>
         )}
 
-        {/* Ordine Esistente */}
         {myOrder && !selectedPizza && !isEditing && (
           <Card className={`p-5 border-2 ${overrideActive ? 'border-[#5856D6]' : 'border-[#34C759]'}`}>
             <div className="flex justify-between items-start mb-4">
               <div>
                 <p className={`text-[10px] font-black ${overrideActive ? 'text-[#5856D6]' : 'text-[#34C759]'} uppercase tracking-widest mb-1`}>Prenotazione Attiva</p>
                 <h2 className="text-2xl font-black">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
+                <div className="mt-1 space-y-0.5">
+                  {myOrder.addModificationId && (
+                    <p className="text-[10px] text-green-600 font-bold uppercase tracking-tight">
+                      + {modifications.find(m => m.id === myOrder.addModificationId)?.name}
+                    </p>
+                  )}
+                  {myOrder.removeModificationId && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-tight">
+                      - {modifications.find(m => m.id === myOrder.removeModificationId)?.name}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="bg-[#F2F2F7] px-3 py-1.5 rounded-full flex items-center gap-1.5">
                 <ClockIcon size={16} className="text-[#8E8E93]" />
@@ -180,7 +198,13 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
             {canOrder && (
               <Button onClick={() => {
                 const p = pizzas.find(px => px.id === myOrder.pizzaId);
-                if(p) { setSelectedPizza(p); setSlot(myOrder.slotTime); setNote(myOrder.note); setIsEditing(true); }
+                if(p) { 
+                  setSelectedPizza(p); 
+                  setSlot(myOrder.slotTime); 
+                  setAddModId(myOrder.addModificationId || null); 
+                  setRemoveModId(myOrder.removeModificationId || null);
+                  setIsEditing(true); 
+                }
               }} variant="secondary" fullWidth className="!bg-[#F2F2F7] hover:!bg-[#E5E5EA]">
                 Modifica Scelta
               </Button>
@@ -188,7 +212,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
           </Card>
         )}
 
-        {/* Menu Pizze */}
         {(!myOrder || isEditing) && !selectedPizza && (
           <>
             <div className="relative">
@@ -224,7 +247,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
   const renderSettings = () => (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
-      {/* Profilo */}
       <div className="text-center py-6">
         <div className="w-20 h-20 bg-[#007AFF] rounded-full flex items-center justify-center text-white mx-auto shadow-xl mb-3">
           <UserIcon size={40} />
@@ -316,7 +338,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
 
       {activeTab === 'menu' ? renderMenu() : renderSettings()}
 
-      {/* Tab Bar iOS Style */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg ios-blur border-t border-[#C6C6C8] px-8 py-3 pb-8 flex justify-between items-center z-40">
         <button 
           onClick={() => setActiveTab('menu')}
@@ -334,7 +355,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
         </button>
       </nav>
 
-      {/* Bottom Sheet Order */}
       {selectedPizza && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { if(!submitting) setSelectedPizza(null); }} />
@@ -346,10 +366,41 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout }) => 
                 <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Orario di ritiro</p>
                 <SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} />
               </div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Note o varianti</p>
-                <Input placeholder="Es: Senza mozzarella, ben cotta..." value={note} onChange={(e) => setNote(e.target.value)} />
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Modifiche (Opzionali)</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-[#8E8E93] uppercase pl-1 block mb-1">Aggiungi</label>
+                    <select 
+                      className="w-full px-4 py-3 rounded-xl bg-[#F2F2F7] border-none text-sm font-medium appearance-none"
+                      value={addModId || ''}
+                      onChange={(e) => setAddModId(e.target.value || null)}
+                    >
+                      <option value="">Nessuna aggiunta</option>
+                      {addOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>+ {opt.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-[#8E8E93] uppercase pl-1 block mb-1">Togli</label>
+                    <select 
+                      className="w-full px-4 py-3 rounded-xl bg-[#F2F2F7] border-none text-sm font-medium appearance-none"
+                      value={removeModId || ''}
+                      onChange={(e) => setRemoveModId(e.target.value || null)}
+                    >
+                      <option value="">Nessuna rimozione</option>
+                      {removeOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>- {opt.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
+
               <Button fullWidth onClick={handleConfirmOrder} disabled={submitting}>
                 {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Invia Ordine'}
               </Button>

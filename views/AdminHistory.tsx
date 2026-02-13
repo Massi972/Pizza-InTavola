@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Day, Order } from '../types';
+import { Day, Order, Modification } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/UI';
@@ -15,6 +15,7 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
   const [days, setDays] = useState<Day[]>([]);
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
+  const [modifications, setModifications] = useState<Modification[]>([]);
   const [loading, setLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -22,8 +23,12 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
     const fetchDays = async () => {
       setLoading(true);
       try {
-        const data = await db.getDays();
-        setDays(data);
+        const [dayList, modList] = await Promise.all([
+          db.getDays(),
+          db.getModifications()
+        ]);
+        setDays(dayList);
+        setModifications(modList);
       } catch (err) {
         console.error(err);
       } finally {
@@ -46,7 +51,9 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
       setOrders(dayOrders.map(o => ({
         ...o,
         user: users.find(u => u.id === o.userId),
-        pizza: pizzas.find(p => p.id === o.pizzaId)
+        pizza: pizzas.find(p => p.id === o.pizzaId),
+        addMod: modifications.find(m => m.id === o.addModificationId),
+        removeMod: modifications.find(m => m.id === o.removeModificationId)
       })));
     } catch (err) {
       console.error(err);
@@ -100,8 +107,14 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-bold text-sm">{o.user?.firstName} {o.user?.lastName}</p>
-                      <p className="text-xs text-[#007AFF] font-medium">{o.pizza?.name || 'Pizza eliminata'}</p>
-                      {o.note && <p className="text-[10px] italic text-[#8E8E93]">"{o.note}"</p>}
+                      <div className="flex items-center gap-2">
+                         <p className="text-xs text-[#007AFF] font-bold">{o.pizza?.name || 'Pizza eliminata'}</p>
+                         <div className="flex gap-1">
+                           {o.addMod && <span className="text-[9px] font-black text-green-600 bg-green-50 px-1 rounded">+{o.addMod.name}</span>}
+                           {o.removeMod && <span className="text-[9px] font-black text-red-500 bg-red-50 px-1 rounded">-{o.removeMod.name}</span>}
+                         </div>
+                      </div>
+                      {o.note && <p className="text-[10px] italic text-[#8E8E93] mt-1">"{o.note}"</p>}
                     </div>
                     <div className="text-[10px] font-bold bg-[#F2F2F7] px-2 py-0.5 rounded">
                       {o.slotTime}

@@ -5,8 +5,15 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export const exportToCSV = (date: string, data: any[]) => {
-  const header = ['Orario', 'Dipendente', 'Pizza', 'Note'];
-  const rows = data.map(o => [o.slotTime, `${o.user.firstName} ${o.user.lastName}`, o.pizza.name, o.note]);
+  const header = ['Orario', 'Dipendente', 'Pizza', 'Variazioni', 'Note'];
+  const rows = data.map(o => {
+    const mods = [
+      o.addMod ? `+${o.addMod.name}` : '',
+      o.removeMod ? `-${o.removeMod.name}` : ''
+    ].filter(Boolean).join(", ");
+    
+    return [o.slotTime, `${o.user.firstName} ${o.user.lastName}`, o.pizza.name, mods || '—', o.note || '—'];
+  });
   
   const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -19,12 +26,20 @@ export const exportToCSV = (date: string, data: any[]) => {
 
 export const exportToXLSX = (date: string, orders: any[]) => {
   const workbook = XLSX.utils.book_new();
-  const worksheetData = orders.map(o => ({
-    Orario: o.slotTime,
-    Dipendente: `${o.user.firstName} ${o.user.lastName}`,
-    Pizza: o.pizza.name,
-    Note: o.note
-  }));
+  const worksheetData = orders.map(o => {
+    const mods = [
+      o.addMod ? `+${o.addMod.name}` : '',
+      o.removeMod ? `-${o.removeMod.name}` : ''
+    ].filter(Boolean).join(", ");
+
+    return {
+      Orario: o.slotTime,
+      Dipendente: `${o.user.firstName} ${o.user.lastName}`,
+      Pizza: o.pizza.name,
+      Variazioni: mods || '—',
+      Note: o.note || '—'
+    };
+  });
 
   const ws = XLSX.utils.json_to_sheet(worksheetData);
   XLSX.utils.book_append_sheet(workbook, ws, "Ordini");
@@ -47,15 +62,23 @@ export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>,
       doc.text(`Slot Orario: ${slot}`, 14, yPos);
       yPos += 5;
 
-      const body = slotOrders.map(o => [
-        `${o.user.firstName} ${o.user.lastName}`,
-        o.pizza.name,
-        o.note || '-'
-      ]);
+      const body = slotOrders.map(o => {
+        const mods = [
+          o.addMod ? `+${o.addMod.name}` : '',
+          o.removeMod ? `-${o.removeMod.name}` : ''
+        ].filter(Boolean).join(", ");
+
+        return [
+          `${o.user.firstName} ${o.user.lastName}`,
+          o.pizza.name,
+          mods || '—',
+          o.note || '—'
+        ];
+      });
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Dipendente', 'Pizza', 'Note']],
+        head: [['Dipendente', 'Pizza', 'Variazioni', 'Note']],
         body: body,
       });
 
@@ -64,7 +87,6 @@ export const exportToPDF = (date: string, ordersBySlot: Record<SlotTime, any[]>,
     }
   });
 
-  // Summary by Pizza
   doc.setFontSize(14);
   doc.text("Totali per Pizza", 14, yPos);
   yPos += 5;
