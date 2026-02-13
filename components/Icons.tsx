@@ -24,7 +24,8 @@ import {
   Copy,
   MessageCircle,
   RefreshCw,
-  Key
+  Key,
+  Fingerprint
 } from 'lucide-react';
 
 export {
@@ -51,5 +52,6 @@ export {
   Copy,
   MessageCircle,
   RefreshCw,
-  Key
+  Key,
+  Fingerprint
 };
