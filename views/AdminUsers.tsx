@@ -41,7 +41,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   };
 
   const getPINMessage = (user: User) => {
-    return `Ciao! Sono InTavola SRL. Questo è il tuo codice strettamente personale: ${user.pin}. Non condividerlo.`;
+    return `Ciao ${user.firstName}! Sono lo staff di InTavola. Questo è il tuo codice personale per ordinare la pizza: ${user.pin}. Accedi qui: ${window.location.origin}`;
   };
 
   const copyToClipboard = async (user: User) => {
@@ -60,9 +60,22 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       alert("Numero di telefono mancante!");
       return;
     }
-    const cleanPhone = phone.replace('+', '').replace(/\s/g, '');
+    
+    // Pulizia aggressiva del numero: tieni solo i numeri
+    // WhatsApp wa.me richiede il numero nel formato: prefisso + numero senza '+' o spazi
+    // Esempio: 393331234567
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    if (cleanPhone.length < 10) {
+      alert("Il numero di telefono sembra incompleto o errato.");
+      return;
+    }
+
     const msg = encodeURIComponent(getPINMessage(user));
-    window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+    // Utilizziamo l'endpoint api.whatsapp.com per una compatibilità maggiore su mobile
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`;
+    
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleSave = async () => {
@@ -71,8 +84,9 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       return;
     }
     
-    if (!editing.phone_e164.startsWith('+')) {
-      setError('Il numero deve iniziare con + (formato internazionale, es. +39...)');
+    // Validazione base del numero di telefono
+    if (!editing.phone_e164.includes('+')) {
+      setError('Inserisci il prefisso internazionale (es. +39 per Italia)');
       return;
     }
 
@@ -95,7 +109,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       await db.saveUser(editing);
       await fetchUsers();
       
-      // Mostra overlay di successo con opzioni di condivisione
       setSuccessUser({ ...editing as User });
       setEditing(null);
     } catch (err: any) {
@@ -151,7 +164,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                   <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-green-600 flex items-center gap-1">
-                        <Check size={14} /> PIN impostato ✅
+                        <Check size={14} /> PIN configurato
                       </span>
                       <button 
                         onClick={() => { setEditing({ ...u, pin: '' }); setError(''); }}
@@ -203,13 +216,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
               </div>
               
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (es. +39...)</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (es. +393331234567)</label>
                 <Input 
                   placeholder="+39..."
                   type="tel"
                   value={editing.phone_e164 || ''} 
                   onChange={e => setEditing({...editing, phone_e164: e.target.value})} 
                 />
+                <p className="text-[9px] text-[#8E8E93] mt-1 italic">* Includi sempre il prefisso internazionale</p>
               </div>
 
               <div className="space-y-1">
@@ -217,7 +231,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 <Input 
                   type="text"
                   inputMode="numeric"
-                  placeholder="Inserisci nuovo PIN"
+                  placeholder="Inserisci PIN"
                   className="font-mono tracking-widest text-lg"
                   value={editing.pin || ''} 
                   onChange={e => setEditing({...editing, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})} 
@@ -250,7 +264,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
             </div>
 
             <Button fullWidth onClick={handleSave} disabled={saving} className="mt-4">
-              {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva e Genera Messaggio'}
+              {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva e Prepara Messaggio'}
             </Button>
           </div>
         </div>
@@ -266,12 +280,12 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
             </div>
             
             <div>
-              <h2 className="text-2xl font-black tracking-tight text-[#1c1c1e]">Salvataggio Riuscito!</h2>
-              <p className="text-[#8E8E93] text-sm mt-1">Comunica le credenziali a <span className="text-black font-bold">{successUser.firstName}</span></p>
+              <h2 className="text-2xl font-black tracking-tight text-[#1c1c1e]">Dati Salvati!</h2>
+              <p className="text-[#8E8E93] text-sm mt-1">Invia le credenziali a <span className="text-black font-bold">{successUser.firstName}</span></p>
             </div>
 
             <div className="bg-[#F2F2F7] p-4 rounded-2xl border border-[#E5E5EA]">
-              <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1 tracking-widest">Codice PIN Personale</p>
+              <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1 tracking-widest">PIN Da Comunicare</p>
               <p className="text-3xl font-mono font-black tracking-[0.2em] text-[#007AFF]">{successUser.pin}</p>
             </div>
 
@@ -280,13 +294,16 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                 <MessageCircle size={20} /> Invia su WhatsApp
               </Button>
               <Button fullWidth variant="secondary" className="border border-[#D1D1D6]" onClick={() => copyToClipboard(successUser)}>
-                <Copy size={20} /> Copia Messaggio
+                <Copy size={20} /> Copia Messaggio Testuale
               </Button>
+              <p className="text-[10px] text-[#8E8E93] px-4 leading-relaxed italic">
+                Nota: WhatsApp aprirà una chat. Dovrai premere "Invia" manualmente per completare la consegna.
+              </p>
               <button 
                 onClick={() => setSuccessUser(null)} 
                 className="w-full text-xs font-bold text-[#8E8E93] uppercase tracking-widest pt-2"
               >
-                Chiudi
+                Ho terminato
               </button>
             </div>
           </div>
