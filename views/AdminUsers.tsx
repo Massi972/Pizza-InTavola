@@ -41,7 +41,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   };
 
   const getPINMessage = (user: User) => {
-    return `Ciao ${user.firstName}! Sono lo staff di InTavola. Questo è il tuo codice personale per ordinare la pizza: ${user.pin}. Accedi qui: ${window.location.origin}`;
+    return `Ciao ${user.firstName}! Sono Luciano di InTavola. Questo è il tuo codice personale per ordinare la pizza: ${user.pin}. Accedi qui: ${window.location.origin}`;
   };
 
   const copyToClipboard = async (user: User) => {
