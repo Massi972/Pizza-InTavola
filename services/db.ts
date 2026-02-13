@@ -2,27 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification } from '../types';
 
-/**
- * SCHEMA SQL SUGGERITO (da eseguire nel pannello SQL di Supabase):
- * 
- * -- 1. Tabella Modifiche
- * CREATE TABLE modifications (
- *   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
- *   name TEXT NOT NULL,
- *   type TEXT CHECK (type IN ('ADD', 'REMOVE')),
- *   active BOOLEAN DEFAULT true,
- *   sort_order INT DEFAULT 0,
- *   created_at TIMESTAMPTZ DEFAULT now()
- * );
- * 
- * -- 2. Aggiornamento Ordini
- * ALTER TABLE orders ADD COLUMN add_modification_id UUID REFERENCES modifications(id) ON DELETE SET NULL;
- * ALTER TABLE orders ADD COLUMN remove_modification_id UUID REFERENCES modifications(id) ON DELETE SET NULL;
- * 
- * -- 3. Vincolo Unicità Ordine (fondamentale per UPSERT)
- * ALTER TABLE orders ADD CONSTRAINT unique_day_user UNIQUE (day_id, user_id);
- */
-
 const getEnvVar = (name: string, fallback: string): string => {
   try {
     const env = (import.meta as any).env;
@@ -46,6 +25,17 @@ export interface GlobalSettings {
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Error in ${context}:`, error);
+    
+    // Errore tabella mancante (Postgres code 42P01)
+    if (error.code === '42P01') {
+      throw new Error(`Configurazione Database Mancante: La tabella necessaria per "${context}" non esiste. Vai nell'editor SQL di Supabase e crea le tabelle.`);
+    }
+    
+    // Errore colonna mancante (Postgres code 42703)
+    if (error.code === '42703') {
+      throw new Error(`Aggiornamento Database Richiesto: Una colonna necessaria per "${context}" manca. Controlla lo schema SQL.`);
+    }
+
     const msg = error.message || "Errore sconosciuto";
     throw new Error(`${context}: ${msg}`);
   }
@@ -134,16 +124,16 @@ class DB {
     return data.map(p => ({ 
       id: p.id, 
       name: p.name, 
-      description: p.description, 
-      ingredients: p.ingredients, 
-      allergens: p.allergens, 
+      description: p.description || '', 
+      ingredients: p.ingredients || [], 
+      allergens: p.allergens || [], 
       active: p.active, 
       isVegetarian: p.is_vegetarian 
     }));
   }
 
   async savePizza(pizza: Partial<Pizza>): Promise<void> {
-    const payload = { 
+    const payload: any = { 
       name: pizza.name, 
       description: pizza.description || '', 
       ingredients: pizza.ingredients || [], 
@@ -151,9 +141,16 @@ class DB {
       active: pizza.active !== false, 
       is_vegetarian: pizza.isVegetarian || false 
     };
-    const { error } = pizza.id
-      ? await supabase.from('pizzas').update(payload).eq('id', pizza.id)
-      : await supabase.from('pizzas').insert([payload]);
+    
+    let error;
+    if (pizza.id) {
+      const res = await supabase.from('pizzas').update(payload).eq('id', pizza.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('pizzas').insert([payload]);
+      error = res.error;
+    }
+    
     if (error) await this.handleError(error, "Salvataggio pizza");
   }
 
@@ -163,20 +160,18 @@ class DB {
   }
 
   async getModifications(): Promise<Modification[]> {
-    try {
-      const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data.map(m => ({
-        id: m.id,
-        name: m.name,
-        type: m.type as 'ADD' | 'REMOVE',
-        active: m.active,
-        sort_order: m.sort_order
-      }));
-    } catch (err) {
-      console.warn("Tabella modifications non trovata o errore query:", err);
-      return []; // Ritorna lista vuota invece di bloccare tutto
+    const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
+    if (error) {
+      if (error.code === '42P01') return []; // Tabella non ancora creata
+      await this.handleError(error, "Caricamento varianti");
     }
+    return (data || []).map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.type as 'ADD' | 'REMOVE',
+      active: m.active,
+      sort_order: m.sort_order
+    }));
   }
 
   async saveModification(mod: Partial<Modification>): Promise<void> {
@@ -186,9 +181,16 @@ class DB {
       active: mod.active !== false,
       sort_order: mod.sort_order || 0
     };
-    const { error } = mod.id
-      ? await supabase.from('modifications').update(payload).eq('id', mod.id)
-      : await supabase.from('modifications').insert([payload]);
+    
+    let error;
+    if (mod.id) {
+      const res = await supabase.from('modifications').update(payload).eq('id', mod.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('modifications').insert([payload]);
+      error = res.error;
+    }
+    
     if (error) await this.handleError(error, "Salvataggio variante");
   }
 
@@ -290,13 +292,12 @@ class DB {
       user_id: order.userId, 
       pizza_id: order.pizzaId, 
       slot_time: order.slotTime, 
-      add_modification_id: order.addModificationId || null, // Importante: null invece di ""
-      remove_modification_id: order.removeModificationId || null, // Importante: null invece di ""
+      add_modification_id: order.addModificationId || null,
+      remove_modification_id: order.removeModificationId || null,
       note: order.note || '',
       updated_at: new Date().toISOString() 
     };
     
-    // NOTA: Richiede un vincolo di unicità su (day_id, user_id) nella tabella orders
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
   }

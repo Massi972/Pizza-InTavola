@@ -4,7 +4,7 @@ import { Pizza } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X } from '../components/Icons';
+import { Plus, Edit2, Trash2, X, AlertCircle } from '../components/Icons';
 
 interface AdminPizzasProps {
   onBack: () => void;
@@ -15,14 +15,16 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
   const [editing, setEditing] = useState<Partial<Pizza> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchPizzas = async () => {
     setLoading(true);
+    setError('');
     try {
       const data = await db.getPizzas();
       setPizzas(data);
-    } catch (err) {
-      alert("Errore caricamento pizze");
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -35,12 +37,13 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
   const handleSave = async () => {
     if (!editing?.name) return;
     setSaving(true);
+    setError('');
     try {
       await db.savePizza(editing);
       await fetchPizzas();
       setEditing(null);
-    } catch (err) {
-      alert("Errore nel salvataggio");
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -51,8 +54,8 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
       try {
         await db.deletePizza(id);
         await fetchPizzas();
-      } catch (err) {
-        alert("Errore nella cancellazione");
+      } catch (err: any) {
+        alert("Errore: " + err.message);
       }
     }
   };
@@ -61,17 +64,23 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
     try {
       await db.savePizza({ ...pizza, active: !pizza.active });
       await fetchPizzas();
-    } catch (err) {
-      alert("Errore aggiornamento stato");
+    } catch (err: any) {
+      alert("Errore: " + err.message);
     }
   };
 
   return (
     <Layout title="Gestione Pizze" onBack={onBack}>
       <div className="space-y-4">
-        <Button fullWidth onClick={() => setEditing({})}>
+        <Button fullWidth onClick={() => { setEditing({}); setError(''); }}>
           <Plus size={20} /> Aggiungi Nuova Pizza
         </Button>
+
+        {error && (
+          <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100 flex items-center gap-2">
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-20"><div className="loading-spinner" /></div>
@@ -85,7 +94,7 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
                     <p className="text-xs text-[#8E8E93]">{p.ingredients?.join(', ')}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setEditing(p)} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
+                    <button onClick={() => { setEditing(p); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                       <Edit2 size={16} />
                     </button>
                     <button onClick={() => handleDelete(p.id)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
@@ -150,7 +159,7 @@ const AdminPizzas: React.FC<AdminPizzasProps> = ({ onBack }) => {
               </div>
             </div>
 
-            <Button fullWidth onClick={handleSave} disabled={saving}>
+            <Button fullWidth onClick={handleSave} disabled={saving} className="mt-4">
               {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva Pizza'}
             </Button>
           </div>
