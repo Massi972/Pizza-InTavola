@@ -15,7 +15,8 @@ import {
   AlertCircle, 
   X,
   Fingerprint,
-  Sliders
+  Sliders,
+  RefreshCw
 } from '../components/Icons';
 import { formatDate } from '../services/utils';
 
@@ -34,9 +35,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [error, setError] = useState<{message: string, code?: string} | null>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_biometric_enabled') === 'true');
   const [toast, setToast] = useState<string | null>(null);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
+    setSchemaError(null);
     try {
       const [day, globalSettings] = await Promise.all([
         db.getCurrentDay(),
@@ -60,7 +63,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       }
     } catch (err: any) {
       console.error(err);
-      if (err.message?.includes('relation "settings" does not exist')) {
+      if (err.message?.includes('SCHEMA ERROR') || err.message?.includes('add_modification_ids')) {
+        setSchemaError("CONFIGURAZIONE DATABASE NECESSARIA: Manca la colonna 'add_modification_ids'. Esegui lo script SQL nel pannello di controllo.");
+      } else if (err.message?.includes('relation "settings" does not exist')) {
         setError({ message: "Tabella 'settings' mancante.", code: '42P01' });
       }
     } finally {
@@ -107,6 +112,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       )}
 
       <div className="space-y-6">
+        {schemaError && (
+          <Card className="p-4 bg-red-50 border-2 border-red-200 animate-pulse">
+            <div className="flex items-start gap-3 text-red-700">
+              <AlertCircle className="shrink-0 mt-1" size={20} />
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase">Errore Critico Database</p>
+                <p className="text-sm font-bold leading-tight">{schemaError}</p>
+                <Button onClick={fetchData} variant="secondary" className="!py-1.5 !text-[10px] !bg-white">
+                  <RefreshCw size={12} /> Riprova
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <Card className="p-4 border-l-4 border-[#5856D6]">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">

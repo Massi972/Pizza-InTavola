@@ -25,12 +25,18 @@ export interface GlobalSettings {
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Error in ${context}:`, error);
+    
+    // Errore tabella mancante
     if (error.code === '42P01') {
-      throw new Error(`Configurazione Database Mancante: La tabella necessaria per "${context}" non esiste. Vai nell'editor SQL di Supabase.`);
+      throw new Error(`DATABASE ERROR: La tabella "${error.message.split('"')[1]}" non esiste. Esegui il setup SQL in Supabase.`);
     }
+    
+    // Errore colonna mancante (il tuo errore attuale)
     if (error.code === '42703') {
-      throw new Error(`Aggiornamento Database Richiesto: Una colonna necessaria (es. add_modification_ids) manca.`);
+      const missingCol = error.message.split('"')[1];
+      throw new Error(`SCHEMA ERROR: Manca la colonna "${missingCol}" nella tabella degli ordini. Devi eseguire l'ALTER TABLE in Supabase per supportare le variazioni multiple.`);
     }
+
     const msg = error.message || "Errore sconosciuto";
     throw new Error(`${context}: ${msg}`);
   }
