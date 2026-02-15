@@ -11,20 +11,15 @@ import {
   Check, 
   AlertCircle, 
   X, 
-  Fingerprint, 
   Lock, 
   Settings, 
   UserIcon,
-  ChevronRight,
-  ChevronLeft,
   LogOut,
-  Plus,
-  Trash2,
   Sliders
 } from '../components/Icons';
 import { isBeforeCutoff } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
-import { isBiometricAvailable, registerBiometrics } from '../services/biometrics';
+import { isBiometricAvailable } from '../services/biometrics';
 
 interface WorkerDashboardProps {
   user: User;
@@ -49,10 +44,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [isBioSupported, setIsBioSupported] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_biometric_enabled') === 'true');
 
   const addOptions = modifications.filter(m => m.type === 'ADD' && m.active);
   const removeOptions = modifications.filter(m => m.type === 'REMOVE' && m.active);
@@ -88,7 +83,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         setMyOrder(order);
         setOverrideActive(settings.override_cutoff);
       } catch (err: any) {
-        setMessage({ text: err.message || "Errore nel caricamento dei dati", type: "error" });
+        setErrorMessage(err.message || "Errore nel caricamento dei dati");
       } finally {
         setLoading(false);
       }
@@ -107,6 +102,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const handleConfirmOrder = async () => {
     if (!selectedPizza || !currentDay) return;
     setSubmitting(true);
+    setErrorMessage(null);
     try {
       const order: Partial<Order> = {
         id: myOrder?.id,
@@ -119,17 +115,18 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         note: ''
       };
       await db.saveOrder(order);
-      const updatedOrder = await db.getUserOrderToday(user.id);
-      setMyOrder(updatedOrder);
+      
+      // Mostra l'overlay di successo
+      setShowSuccess(true);
       setSelectedPizza(null);
-      setSelectedAddIds([]);
-      setSelectedRemoveIds([]);
-      setIsEditing(false);
-      setMessage({ text: "Ordine inviato con successo!", type: "success" });
-      setTimeout(() => setMessage(null), 3000);
+      
+      // Logout automatico dopo 2 secondi per tornare al PIN
+      setTimeout(() => {
+        onLogout();
+      }, 2000);
+      
     } catch (err: any) {
-      setMessage({ text: err.message || "Errore durante il salvataggio", type: "error" });
-    } finally {
+      setErrorMessage(err.message || "Errore durante il salvataggio");
       setSubmitting(false);
     }
   };
@@ -239,12 +236,22 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       title={activeTab === 'menu' ? 'Menu Pizze' : 'Impostazioni'}
       onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}
     >
-      {message && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-500 ${
-          message.type === 'success' ? 'bg-[#34C759] text-white' : 'bg-[#FF3B30] text-white'
-        }`}>
-          {message.type === 'success' ? <Check size={20} /> : <AlertCircle size={20} />}
-          <p className="font-bold text-sm flex-1">{message.text}</p>
+      {/* Overlay di Successo con segnale "Pizza ordinata" */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-500">
+            <Check size={48} strokeWidth={3} />
+          </div>
+          <h2 className="text-3xl font-black text-[#1c1c1e] tracking-tight">Pizza ordinata</h2>
+          <p className="text-[#8E8E93] font-bold mt-2 uppercase tracking-[0.2em] text-[10px]">Arrivederci!</p>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm p-4 rounded-2xl shadow-2xl bg-[#FF3B30] text-white flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-500">
+          <AlertCircle size={20} />
+          <p className="font-bold text-sm flex-1">{errorMessage}</p>
+          <button onClick={() => setErrorMessage(null)}><X size={18} /></button>
         </div>
       )}
 
