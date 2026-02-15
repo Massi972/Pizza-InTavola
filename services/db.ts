@@ -289,6 +289,15 @@ class DB {
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
   }
+
+  async resetSeasonalData(): Promise<void> {
+    // Ordine di cancellazione per vincoli di integrità: prima gli ordini, poi le giornate
+    const { error: ordersError } = await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (ordersError) throw ordersError;
+    
+    const { error: daysError } = await supabase.from('days').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (daysError) throw daysError;
+  }
 }
 
 export const db = new DB();

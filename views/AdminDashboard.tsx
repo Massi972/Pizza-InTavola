@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Day, DayStatus, SlotTime, Role, Modification } from '../types';
 import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
-import { Card, Button } from '../components/UI';
+import { Card, Button, Input } from '../components/UI';
 import { 
   UsersIcon, 
   PizzaIcon, 
@@ -14,7 +14,10 @@ import {
   Sliders,
   RefreshCw,
   FileText,
-  Calendar
+  Calendar,
+  RotateCcw,
+  X,
+  Check
 } from '../components/Icons';
 import { formatDate } from '../services/utils';
 import { generateDayReportPDF, HydratedOrder } from '../services/exportService';
@@ -36,6 +39,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [error, setError] = useState<{message: string, code?: string} | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  // Stati per Reset Stagionale Nascosto
+  const [clickCount, setClickCount] = useState(0);
+  const [showResetPin, setShowResetPin] = useState(false);
+  const [resetPin, setResetPin] = useState('');
+  const [showFinalConfirm, setShowFinalConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  // Fix: Using ReturnType<typeof setTimeout> instead of NodeJS.Timeout to avoid namespace errors in browser environment
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -65,6 +77,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         }));
         
         setOrders(hydratedOrders);
+      } else {
+        setOrders([]);
       }
     } catch (err: any) {
       console.error(err);
@@ -81,6 +95,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleTitleClick = () => {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+
+    if (newCount === 7) {
+      setShowResetPin(true);
+      setClickCount(0);
+    } else {
+      resetTimerRef.current = setTimeout(() => setClickCount(0), 3000);
+    }
+  };
+
+  const handleResetPinSubmit = () => {
+    if (resetPin === '1131') {
+      setShowResetPin(false);
+      setShowFinalConfirm(true);
+      setResetPin('');
+    } else {
+      alert("PIN Errato");
+      setResetPin('');
+    }
+  };
+
+  const executeSeasonalReset = async () => {
+    setIsResetting(true);
+    try {
+      await db.resetSeasonalData();
+      setShowFinalConfirm(false);
+      setToast("Reset Stagionale Completato ✅");
+      setTimeout(() => setToast(null), 3000);
+      await fetchData();
+    } catch (err: any) {
+      alert("Errore durante il reset: " + err.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleToggleDay = async (action: 'open' | 'close') => {
     setActionLoading(true);
@@ -118,10 +172,87 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   }
 
   return (
-    <Layout title="Dashboard Gestionale" onLogout={onLogout}>
+    <Layout 
+      title="Dashboard Gestionale" 
+      onLogout={onLogout}
+    >
+      {/* Easter Egg Trigger sul titolo invisibile (sovrapposto al titolo del layout tramite contatore interno) */}
+      <div 
+        className="fixed top-0 left-1/4 right-1/4 h-14 z-[60] cursor-default" 
+        onClick={handleTitleClick}
+      />
+
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-4 py-2 rounded-full text-xs font-bold animate-in fade-in zoom-in duration-300">
           {toast}
+        </div>
+      )}
+
+      {/* Overlay PIN Reset */}
+      {showResetPin && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <Card className="w-full max-w-sm p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                <Lock size={32} />
+              </div>
+              <h3 className="text-xl font-black">Area Riservata</h3>
+              <p className="text-xs text-[#8E8E93] font-bold uppercase tracking-widest">Inserisci Codice Reset Stagione</p>
+            </div>
+            <Input 
+              type="password" 
+              placeholder="••••" 
+              className="text-center text-3xl tracking-[1em] font-black"
+              value={resetPin}
+              onChange={e => setResetPin(e.target.value)}
+              maxLength={4}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => { setShowResetPin(false); setResetPin(''); }}>Annulla</Button>
+              <Button className="flex-1 !bg-red-600" onClick={handleResetPinSubmit}>Sblocca</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Overlay Conferma Finale Reset */}
+      {showFinalConfirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-red-600/90 backdrop-blur-lg animate-in fade-in duration-300">
+          <Card className="w-full max-w-sm p-8 space-y-6 text-center shadow-2xl">
+            <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+              <RotateCcw size={40} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-red-600">ATTENZIONE!</h3>
+              <p className="text-sm font-bold text-[#1c1c1e] leading-tight">
+                Stai per cancellare DEFINITIVAMENTE:<br/>
+                <span className="text-red-600 font-black">• Tutti gli ordini passati</span><br/>
+                <span className="text-red-600 font-black">• Tutte le giornate registrate</span>
+              </p>
+              <p className="text-[10px] text-[#8E8E93] font-medium italic pt-2">
+                Dipendenti, Pizze e Variazioni NON saranno toccati.
+              </p>
+            </div>
+            <div className="space-y-3 pt-4">
+              <Button 
+                fullWidth 
+                variant="danger" 
+                className="!py-4 text-lg !bg-red-700 shadow-xl" 
+                onClick={executeSeasonalReset}
+                disabled={isResetting}
+              >
+                {isResetting ? <RefreshCw className="animate-spin" /> : "SÌ, CANCELLA TUTTO"}
+              </Button>
+              <button 
+                className="w-full text-xs font-black text-[#8E8E93] uppercase tracking-widest py-2"
+                onClick={() => setShowFinalConfirm(false)}
+                disabled={isResetting}
+              >
+                Annulla e Torna Indietro
+              </button>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -199,7 +330,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
 
             <div className="grid grid-cols-2 gap-3">
               <Card className="p-4 flex flex-col justify-center items-center text-center">
-                <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1">Totale Ordini</p>
+                <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1">Totale Ordini Oggi</p>
                 <p className="text-3xl font-black text-[#007AFF]">{orders.length}</p>
               </Card>
               <Card className="p-4 flex flex-col justify-center items-center text-center">
@@ -215,7 +346,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                 onClick={handleDownloadReport}
                 className="!bg-[#34C759] hover:!bg-[#28A745] !py-4 shadow-lg active:scale-95"
               >
-                <FileText size={20} /> Scarica Report (PDF)
+                <FileText size={20} /> Scarica Report Giornaliero
               </Button>
             )}
           </>
