@@ -46,7 +46,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [resetPin, setResetPin] = useState('');
   const [showFinalConfirm, setShowFinalConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  // Fix: Using ReturnType<typeof setTimeout> instead of NodeJS.Timeout to avoid namespace errors in browser environment
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = async () => {
@@ -176,7 +175,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       title="Dashboard Gestionale" 
       onLogout={onLogout}
     >
-      {/* Easter Egg Trigger sul titolo invisibile (sovrapposto al titolo del layout tramite contatore interno) */}
       <div 
         className="fixed top-0 left-1/4 right-1/4 h-14 z-[60] cursor-default" 
         onClick={handleTitleClick}
@@ -188,7 +186,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         </div>
       )}
 
-      {/* Overlay PIN Reset */}
       {showResetPin && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <Card className="w-full max-w-sm p-8 space-y-6">
@@ -216,7 +213,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         </div>
       )}
 
-      {/* Overlay Conferma Finale Reset */}
       {showFinalConfirm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-red-600/90 backdrop-blur-lg animate-in fade-in duration-300">
           <Card className="w-full max-w-sm p-8 space-y-6 text-center shadow-2xl">
@@ -328,16 +324,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
               </p>
             </Card>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Card className="p-4 flex flex-col justify-center items-center text-center">
-                <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1">Totale Ordini Oggi</p>
-                <p className="text-3xl font-black text-[#007AFF]">{orders.length}</p>
-              </Card>
-              <Card className="p-4 flex flex-col justify-center items-center text-center">
-                <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1">Codice Locale</p>
-                <p className="text-lg font-mono font-black">{settings.master_code}</p>
-              </Card>
-            </div>
+            <Card className="p-6 flex flex-col justify-center items-center text-center">
+              <p className="text-xs font-bold text-[#8E8E93] uppercase mb-1">Totale Ordini Oggi</p>
+              <p className="text-4xl font-black text-[#007AFF]">{orders.length}</p>
+            </Card>
 
             {orders.length > 0 && (
               <Button 
@@ -352,7 +342,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
           </>
         )}
 
-        {/* SEZIONE GESTIONE - SOLO PER ADMIN */}
         {isAdmin && (
           <div className="space-y-2 pt-4 border-t border-[#C6C6C8]">
             <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Amministrazione</p>
