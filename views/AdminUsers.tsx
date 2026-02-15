@@ -53,6 +53,32 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
     );
   }
 
+  const generateUniquePin = () => {
+    let newPin = '';
+    let isUnique = false;
+    let attempts = 0;
+    
+    // Proviamo a generare un PIN univoco tra quelli presenti localmente (e quindi nel DB)
+    while (!isUnique && attempts < 200) {
+      // Generiamo un PIN di 4 cifre (es. da 1000 a 9999)
+      newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      
+      // Verifichiamo se esiste già tra gli utenti caricati
+      const exists = users.some(u => u.pin === newPin);
+      if (!exists) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+    
+    if (isUnique) {
+      setEditing(prev => prev ? { ...prev, pin: newPin } : null);
+      setError(''); // Puliamo eventuali errori di PIN duplicati precedenti
+    } else {
+      alert("Impossibile generare un PIN univoco dopo molti tentativi. Contatta l'assistenza.");
+    }
+  };
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
@@ -114,7 +140,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
     try {
       const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
       if (!isAvailable) {
-        setError('Questo PIN è già in uso da un altro utente attivo');
+        setError('Questo PIN è già in uso da un altro utente attivo. Generane uno nuovo.');
         setSaving(false);
         return;
       }
@@ -239,14 +265,24 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">PIN Personale (4-6 cifre)</label>
-                <Input 
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="Inserisci PIN"
-                  className="font-mono tracking-widest text-lg"
-                  value={editing.pin || ''} 
-                  onChange={e => setEditing({...editing, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})} 
-                />
+                <div className="relative">
+                  <Input 
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Inserisci PIN"
+                    className="font-mono tracking-widest text-lg pr-12"
+                    value={editing.pin || ''} 
+                    onChange={e => setEditing({...editing, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})} 
+                  />
+                  <button 
+                    type="button"
+                    onClick={generateUniquePin}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#007AFF] hover:bg-[#F2F2F7] rounded-full transition-colors"
+                    title="Genera PIN univoco"
+                  >
+                    <RefreshCw size={20} />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1">
