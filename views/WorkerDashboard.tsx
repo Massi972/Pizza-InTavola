@@ -154,6 +154,16 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
     return (
       <div className="space-y-8">
+        {/* Intestazione Saluto */}
+        <div className="pt-2">
+          <h1 className="text-3xl font-black text-[#1c1c1e] leading-tight">
+            Ciao {user.firstName}! 👋
+          </h1>
+          <p className="text-lg font-bold text-[#8E8E93] mt-1">
+            Che pizza mangi oggi?
+          </p>
+        </div>
+
         {showClosedMessage && (
           <div className="bg-[#FF3B30] text-white p-5 rounded-3xl flex items-center gap-4 shadow-xl animate-in slide-in-from-top-4 duration-300">
             <div className="p-3 bg-white/20 rounded-full shrink-0">
@@ -264,7 +274,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
   return (
     <Layout 
-      title={activeTab === 'menu' ? 'Menu Pizze Staff' : 'Il mio Profilo'}
+      title={activeTab === 'menu' ? 'Dashboard Ordini' : 'Il mio Profilo'}
       onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}
     >
       {showSuccess && (
