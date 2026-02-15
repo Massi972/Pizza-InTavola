@@ -73,7 +73,6 @@ class DB {
     if (error) await this.handleError(error, "Salvataggio impostazioni");
   }
 
-  // ... (rimanenti metodi del db.ts restano invariati)
   async getOverrides(): Promise<DayOverride[]> {
     const { data, error } = await supabase.from('day_overrides').select('*').order('date', { ascending: true });
     if (error) return [];
@@ -219,10 +218,16 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*').eq('day_id', dayId);
     if (error) return [];
     return (data || []).map(o => ({ 
-      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slot_time: o.slot_time as SlotTime,
+      id: o.id, 
+      dayId: o.day_id, 
+      userId: o.user_id, 
+      pizzaId: o.pizza_id, 
+      slotTime: o.slot_time as SlotTime, // Corrected from slot_time to slotTime
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
-      note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
+      note: o.note || '', 
+      createdAt: o.created_at, 
+      updatedAt: o.updated_at 
     }));
   }
 
@@ -231,14 +236,19 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slot_time: data.slot_time as SlotTime,
+      id: data.id, 
+      dayId: data.day_id, 
+      userId: data.user_id, 
+      pizzaId: data.pizza_id, 
+      slotTime: data.slot_time as SlotTime, // Corrected from slot_time to slotTime
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
-      note: data.note || '', createdAt: data.created_at, updatedAt: data.updated_at 
+      note: data.note || '', 
+      createdAt: data.created_at, 
+      updatedAt: data.updated_at 
     };
   }
 
-  // Fix: changed order.add_modification_ids to order.addModificationIds and order.remove_modification_ids to order.removeModificationIds
   async saveOrder(order: Partial<Order>): Promise<void> {
     const todayDate = new Date().toLocaleDateString('en-CA');
     let dayId = order.dayId;
@@ -250,10 +260,14 @@ class DB {
     }
 
     const payload = { 
-      day_id: dayId, user_id: order.userId, pizza_id: order.pizzaId, slot_time: order.slotTime, 
+      day_id: dayId, 
+      user_id: order.userId, 
+      pizza_id: order.pizzaId, 
+      slot_time: order.slotTime, 
       add_modification_ids: order.addModificationIds || [],
       remove_modification_ids: order.removeModificationIds || [],
-      note: order.note || '', updated_at: new Date().toISOString() 
+      note: order.note || '', 
+      updated_at: new Date().toISOString() 
     };
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
