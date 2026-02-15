@@ -73,11 +73,11 @@ const App: React.FC = () => {
     return <WorkerDashboard user={auth.user} onLogout={handleLogout} />;
   }
 
-  // Se l'utente è ADMIN o SUPERVISOR, ha accesso a tutto
+  // Se l'utente è ADMIN o SUPERVISOR
   return (
     <div className="bg-[#F2F2F7] min-h-screen">
       {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
-      {view === 'users' && <AdminUsers onBack={() => setView('dashboard')} />}
+      {view === 'users' && <AdminUsers currentUser={auth.user} onBack={() => setView('dashboard')} />}
       {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
       {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
       {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}

@@ -8,9 +8,10 @@ import { Plus, Edit2, Trash2, X, AlertCircle, Check, Copy, MessageCircle, Refres
 
 interface AdminUsersProps {
   onBack: () => void;
+  currentUser?: User;
 }
 
-const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
+const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [editing, setEditing] = useState<Partial<User> | null>(null);
   const [successUser, setSuccessUser] = useState<User | null>(null);
@@ -18,6 +19,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+
+  const isAdmin = currentUser?.role === Role.ADMIN;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -32,8 +35,23 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (isAdmin) {
+      fetchUsers();
+    }
+  }, [isAdmin]);
+
+  if (!isAdmin) {
+    return (
+      <Layout title="Accesso Negato" onBack={onBack}>
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+          <AlertCircle size={48} className="text-red-500" />
+          <h2 className="text-xl font-bold">Non autorizzato</h2>
+          <p className="text-sm text-[#8E8E93]">Solo gli amministratori possono gestire i dipendenti e i PIN.</p>
+          <Button onClick={onBack}>Torna alla Dashboard</Button>
+        </div>
+      </Layout>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -61,9 +79,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       return;
     }
     
-    // Pulizia aggressiva del numero: tieni solo i numeri
-    // WhatsApp wa.me richiede il numero nel formato: prefisso + numero senza '+' o spazi
-    // Esempio: 393331234567
     const cleanPhone = phone.replace(/\D/g, '');
     
     if (cleanPhone.length < 10) {
@@ -72,7 +87,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
     }
 
     const msg = encodeURIComponent(getPINMessage(user));
-    // Utilizziamo l'endpoint api.whatsapp.com per una compatibilità maggiore su mobile
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`;
     
     window.open(whatsappUrl, '_blank');
@@ -84,7 +98,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
       return;
     }
     
-    // Validazione base del numero di telefono
     if (!editing.phone_e164.includes('+')) {
       setError('Inserisci il prefisso internazionale (es. +39 per Italia)');
       return;
@@ -184,7 +197,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
         )}
       </div>
 
-      {/* Form Creazione/Modifica */}
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditing(null)} />
@@ -223,7 +235,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                   value={editing.phone_e164 || ''} 
                   onChange={e => setEditing({...editing, phone_e164: e.target.value})} 
                 />
-                <p className="text-[9px] text-[#8E8E93] mt-1 italic">* Includi sempre il prefisso internazionale</p>
               </div>
 
               <div className="space-y-1">
@@ -246,7 +257,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
                   onChange={e => setEditing({...editing, role: e.target.value as Role})}
                 >
                   <option value={Role.WORKER}>Dipendente</option>
-                  <option value={Role.SUPERVISOR}>Supervisor (Sola Lettura)</option>
+                  <option value={Role.SUPERVISOR}>Supervisor</option>
                   <option value={Role.ADMIN}>Amministratore</option>
                 </select>
               </div>
@@ -270,7 +281,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
         </div>
       )}
 
-      {/* Overlay Successo / Condivisione */}
       {successUser && (
         <div className="fixed inset-0 z-[60] flex flex-col justify-center items-center p-6">
           <div className="absolute inset-0 bg-[#007AFF]/95 backdrop-blur-md" />
@@ -296,9 +306,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack }) => {
               <Button fullWidth variant="secondary" className="border border-[#D1D1D6]" onClick={() => copyToClipboard(successUser)}>
                 <Copy size={20} /> Copia Messaggio Testuale
               </Button>
-              <p className="text-[10px] text-[#8E8E93] px-4 leading-relaxed italic">
-                Nota: WhatsApp aprirà una chat. Dovrai premere "Invia" manualmente per completare la consegna.
-              </p>
               <button 
                 onClick={() => setSuccessUser(null)} 
                 className="w-full text-xs font-bold text-[#8E8E93] uppercase tracking-widest pt-2"
