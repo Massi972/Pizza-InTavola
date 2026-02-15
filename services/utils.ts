@@ -16,8 +16,12 @@ export const isBeforeCutoff = (): boolean => {
 };
 
 /**
- * Determina se una data specifica è considerata giornata di ordini attiva
- * Sincronizzato con il loop settimanale dell'admin
+ * Determina se una data specifica è considerata giornata di ordini attiva.
+ * LOGICA:
+ * 1. Priorità Assoluta: Record Manuale (Apertura/Chiusura da Admin Dashboard). 
+ *    Se l'Admin APRE, non c'è cutoff. Se l'Admin CHIUDE, è chiuso.
+ * 2. Seconda Priorità: Override (Eccezioni nel calendario). Rispetta il Cutoff.
+ * 3. Terza Priorità: Loop Settimanale (Giorni ricorrenti). Rispetta il Cutoff.
  */
 export const getDayAvailability = (
   dateStr: string, // Formato YYYY-MM-DD
@@ -25,50 +29,57 @@ export const getDayAvailability = (
   overrides: DayOverride[] = [],
   manualDayRecord?: Day | null
 ) => {
-  // Parsing robusto per evitare shift di fuso orario
   const [year, month, day] = dateStr.split('-').map(Number);
-  // Usiamo mezzogiorno per evitare che il fuso orario sposti la data al giorno prima o dopo
   const date = new Date(year, month - 1, day, 12, 0, 0);
   
   const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const dayName = dayNames[date.getDay()];
-  
-  const override = (overrides || []).find(o => o.date === dateStr);
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const isToday = dateStr === todayStr;
   
   let isActive = false;
   let label = '';
   let colorClass = '';
 
-  // 1. Controllo Eccezioni (Override manuali)
-  if (override) {
-    if (override.type === OverrideType.DISABLED || override.type === OverrideType.FORCE_CLOSED) {
-      isActive = false;
-      label = 'DISATTIVATO';
-      colorClass = 'text-red-500 bg-red-50';
+  // 1. PRIORITÀ MASSIMA: CONTROLLO MANUALE (ADMIN ACTION)
+  // Se l'admin ha cliccato "Apri/Chiudi" oggi, questo comando ignora ogni altra regola.
+  if (manualDayRecord && isToday) {
+    if (manualDayRecord.status === DayStatus.OPEN) {
+      return { 
+        isActive: true, 
+        label: 'APERTO MANUALMENTE', 
+        colorClass: 'text-green-600 bg-green-100 font-black',
+        isToday, 
+        dayName 
+      };
     } else {
-      isActive = true;
-      label = 'EXTRA (Attivo)';
-      colorClass = 'text-orange-500 bg-orange-50';
+      return { 
+        isActive: false, 
+        label: 'CHIUSO MANUALMENTE', 
+        colorClass: 'text-red-500 bg-red-50', 
+        isToday, 
+        dayName 
+      };
     }
+  }
+
+  // Se non c'è un record manuale per oggi, procediamo con la logica programmata
+  const override = (overrides || []).find(o => o.date === dateStr);
+  
+  // 2. CONTROLLO PROGRAMMAZIONE (Loop o Eccezioni)
+  let isScheduled = false;
+  if (override) {
+    isScheduled = !(override.type === OverrideType.DISABLED || override.type === OverrideType.FORCE_CLOSED);
+    label = isScheduled ? 'ECCEZIONE (Attiva)' : 'DISATTIVATO';
   } else {
-    // 2. Controllo LOOP SETTIMANALE (Ricorrenza)
-    isActive = (recurringDays || []).includes(dayName);
-    label = isActive ? 'RICORRENTE' : 'NON ATTIVO';
-    colorClass = isActive ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50';
+    isScheduled = (recurringDays || []).includes(dayName);
+    label = isScheduled ? 'RICORRENTE' : 'NON ATTIVO';
   }
 
-  // 3. Controllo record manuale di oggi (se l'admin ha cliccato "Apri/Chiudi" oggi nella dashboard)
-  if (manualDayRecord) {
-    isActive = manualDayRecord.status === DayStatus.OPEN;
-    if (!isActive) {
-      label = 'CHIUSO MANUALMENTE';
-      colorClass = 'text-red-500 bg-red-50';
-    }
-  }
+  isActive = isScheduled;
+  colorClass = isScheduled ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50';
 
-  // 4. Controllo orario cutoff (solo per oggi)
-  const todayStr = new Date().toLocaleDateString('en-CA');
-  const isToday = dateStr === todayStr;
+  // 3. APPLICAZIONE CUTOFF (Solo per la programmazione automatica e solo per oggi)
   if (isActive && isToday && !isBeforeCutoff()) {
     isActive = false;
     label = 'CHIUSO (Oltre 16:30)';

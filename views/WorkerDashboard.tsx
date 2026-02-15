@@ -16,7 +16,8 @@ import {
   UserIcon,
   LogOut,
   Sliders,
-  Fingerprint
+  Fingerprint,
+  ChevronRight
 } from '../components/Icons';
 import { isBeforeCutoff, getDayAvailability } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
@@ -47,6 +48,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showRecap, setShowRecap] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [isBioSupported, setIsBioSupported] = useState(false);
@@ -143,7 +145,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     try {
       const order: Partial<Order> = {
         id: myOrder?.id,
-        dayId: currentDay?.id, // Può essere null, db.saveOrder creerà la giornata
+        dayId: currentDay?.id, 
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
@@ -153,6 +155,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       };
       await db.saveOrder(order);
       
+      setShowRecap(false);
       setShowSuccess(true);
       setSelectedPizza(null);
       
@@ -441,11 +444,77 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </div>
               </section>
 
-              <Button fullWidth onClick={handleConfirmOrder} disabled={submitting}>
-                {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Invia Ordine'}
+              <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting}>
+                Rivedi Ordine
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* OVERLAY RIEPILOGO E CONFERMA */}
+      {showRecap && selectedPizza && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => !submitting && setShowRecap(false)} />
+          <Card className="relative w-full max-w-sm p-8 space-y-6 shadow-2xl bg-white rounded-[32px]">
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-black text-[#1c1c1e] tracking-tight">Controlla l'ordine</h3>
+              <p className="text-xs text-[#8E8E93] font-bold uppercase tracking-widest">Conferma la tua scelta per oggi</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-[#F2F2F7] p-4 rounded-2xl space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-[#007AFF] text-white rounded-xl">
+                    <PizzaIcon size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#8E8E93] uppercase">Pizza</p>
+                    <p className="font-bold">{selectedPizza.name}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-[#FF9500] text-white rounded-xl">
+                    <ClockIcon size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#8E8E93] uppercase">Orario Ritiro</p>
+                    <p className="font-bold">{slot}</p>
+                  </div>
+                </div>
+
+                {(selectedAddIds.length > 0 || selectedRemoveIds.length > 0) && (
+                  <div className="pt-2 border-t border-[#C6C6C8]/30 space-y-1">
+                    <p className="text-[10px] font-black text-[#8E8E93] uppercase">Variazioni</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedAddIds.map(id => {
+                        const m = modifications.find(mod => mod.id === id);
+                        return m ? <span key={id} className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">+{m.name}</span> : null;
+                      })}
+                      {selectedRemoveIds.map(id => {
+                        const m = modifications.find(mod => mod.id === id);
+                        return m ? <span key={id} className="text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">-{m.name}</span> : null;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button fullWidth onClick={handleConfirmOrder} disabled={submitting}>
+                {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Conferma e Invia'}
+              </Button>
+              <button 
+                onClick={() => setShowRecap(false)}
+                disabled={submitting}
+                className="w-full py-2 text-xs font-black text-[#8E8E93] uppercase tracking-widest"
+              >
+                Modifica
+              </button>
+            </div>
+          </Card>
         </div>
       )}
     </Layout>
