@@ -9,6 +9,7 @@ export interface HydratedOrder extends Order {
   pizza?: Pizza;
   addMods: Modification[];
   removeMods: Modification[];
+  dayDate?: string;
 }
 
 export const generateDayReportPDF = (
@@ -31,13 +32,12 @@ export const generateDayReportPDF = (
 
   let yPos = 40;
 
-  // 1. Riepilogo Aggregato per Cucina (Cosa preparare in totale)
+  // 1. Riepilogo Aggregato per Cucina
   doc.setFontSize(16);
   doc.setTextColor(0, 0, 0);
   doc.text("Riepilogo Preparazione (Totale)", 14, yPos);
   yPos += 5;
 
-  // Raggruppiamo per "Configurazione" (Pizza + Modifiche specifiche)
   const configMap = new Map<string, { name: string, mods: string, count: number }>();
   
   orders.forEach(o => {
@@ -65,7 +65,7 @@ export const generateDayReportPDF = (
     head: [['Q.tà', 'Pizza', 'Variazioni']],
     body: summaryBody,
     theme: 'grid',
-    headStyles: { fillColor: [52, 199, 89], fontStyle: 'bold' }, // Verde per il riepilogo
+    headStyles: { fillColor: [52, 199, 89], fontStyle: 'bold' },
     columnStyles: { 0: { cellWidth: 20, fontStyle: 'bold', halign: 'center' } }
   });
 
@@ -112,19 +112,78 @@ export const generateDayReportPDF = (
     yPos = (doc as any).lastAutoTable.finalY + 10;
   });
 
-  // Footer con timestamp di generazione
-  const totalPages = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${i} di ${totalPages}`,
-      pageWidth / 2,
-      doc.internal.pageSize.height - 10,
-      { align: 'center' }
-    );
-  }
-
   doc.save(`Report_Pizze_${date}.pdf`);
+};
+
+export const generateFullHistoryPDF = (orders: HydratedOrder[]) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+
+  doc.setFontSize(22);
+  doc.setTextColor(0, 122, 255);
+  doc.text("IN TAVOLA - Storico Completo Ordini", 14, 20);
+  
+  doc.setFontSize(12);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Totale Ordini Estratti: ${orders.length}`, 14, 28);
+  doc.text(`Generato il: ${new Date().toLocaleDateString('it-IT')}`, pageWidth - 14, 28, { align: 'right' });
+
+  const tableBody = orders.map(o => {
+    const mods = [
+      ...o.addMods.map(m => `+${m.name}`),
+      ...o.removeMods.map(m => `-${m.name}`)
+    ].join(", ");
+
+    return [
+      o.dayDate ? formatDate(o.dayDate) : '—',
+      `${o.user?.firstName} ${o.user?.lastName}`,
+      o.pizza?.name || '—',
+      mods || '—',
+      o.slotTime
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 35,
+    head: [['Data', 'Dipendente', 'Pizza', 'Variazioni', 'Ora']],
+    body: tableBody,
+    theme: 'striped',
+    headStyles: { fillColor: [0, 122, 255] },
+    styles: { fontSize: 8 },
+    columnStyles: {
+      0: { cellWidth: 40 },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 35 }
+    }
+  });
+
+  doc.save(`Storico_Completo_InTavola_${new Date().toISOString().split('T')[0]}.pdf`);
+};
+
+export const generateHistoryCSV = (orders: HydratedOrder[]) => {
+  const headers = ['Data', 'Dipendente', 'Pizza', 'Variazioni', 'Orario'];
+  
+  const rows = orders.map(o => {
+    const mods = [
+      ...o.addMods.map(m => `+${m.name}`),
+      ...o.removeMods.map(m => `-${m.name}`)
+    ].join(" | ");
+
+    return [
+      o.dayDate || '',
+      `${o.user?.firstName} ${o.user?.lastName}`,
+      o.pizza?.name || '',
+      mods,
+      o.slotTime
+    ].map(field => `"${field.replace(/"/g, '""')}"`).join(",");
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `Storico_InTavola_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };

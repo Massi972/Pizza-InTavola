@@ -222,7 +222,24 @@ class DB {
       dayId: o.day_id, 
       userId: o.user_id, 
       pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime, // Corrected from slot_time to slotTime
+      slotTime: o.slot_time as SlotTime,
+      addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
+      removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
+      note: o.note || '', 
+      createdAt: o.created_at, 
+      updatedAt: o.updated_at 
+    }));
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map(o => ({ 
+      id: o.id, 
+      dayId: o.day_id, 
+      userId: o.user_id, 
+      pizzaId: o.pizza_id, 
+      slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
       note: o.note || '', 
@@ -240,7 +257,7 @@ class DB {
       dayId: data.day_id, 
       userId: data.user_id, 
       pizzaId: data.pizza_id, 
-      slotTime: data.slot_time as SlotTime, // Corrected from slot_time to slotTime
+      slotTime: data.slot_time as SlotTime,
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
       note: data.note || '', 
