@@ -20,26 +20,41 @@ export interface GlobalSettings {
   master_code: string;
   override_cutoff: boolean;
   manager_phone?: string;
-  active_days: string[]; // ['MON', 'TUE', ...]
+  active_days: string[]; 
 }
 
 class DB {
   private async handleError(error: any, context: string) {
-    console.error(`Error in ${context}:`, error);
-    throw new Error(`${context}: ${error.message || "Errore sconosciuto"}`);
+    console.error(`Dettaglio Errore [${context}]:`, error);
+    const msg = error.message || "Errore sconosciuto";
+    // Se l'errore indica una colonna mancante, diamo un suggerimento chiaro
+    if (msg.includes("column") && msg.includes("not found")) {
+      throw new Error(`${context}: Manca la colonna 'active_days' nella tabella 'settings'. Controlla lo schema SQL.`);
+    }
+    throw new Error(`${context}: ${msg}`);
   }
 
   async getSettings(): Promise<GlobalSettings> {
+    const defaults: GlobalSettings = { 
+      master_code: 'PIZZA2025', 
+      override_cutoff: false, 
+      manager_phone: '', 
+      active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] 
+    };
+
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      const defaults: GlobalSettings = { 
-        master_code: 'PIZZA2025', 
-        override_cutoff: false, 
-        manager_phone: '', 
-        active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] 
-      };
       
-      if (error || !data) return defaults;
+      if (error) {
+        console.warn("Errore durante il fetch settings, uso i default:", error.message);
+        return defaults;
+      }
+
+      if (!data) {
+        // Se non esiste il record 'global', proviamo a crearlo con i default
+        await supabase.from('settings').insert([{ id: 'global', ...defaults }]);
+        return defaults;
+      }
       
       return {
         master_code: data.master_code || defaults.master_code,
@@ -47,14 +62,23 @@ class DB {
         manager_phone: data.manager_phone || '',
         active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days
       };
-    } catch {
-      return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '', active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] };
+    } catch (err) {
+      console.error("Fallimento critico getSettings:", err);
+      return defaults;
     }
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
-    if (error) await this.handleError(error, "Salvataggio impostazioni");
+    // Rimuoviamo eventuali undefined per evitare errori Supabase
+    const payload = JSON.parse(JSON.stringify(settings));
+    
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ id: 'global', ...payload }, { onConflict: 'id' });
+
+    if (error) {
+      await this.handleError(error, "Salvataggio impostazioni");
+    }
   }
 
   async getOverrides(): Promise<DayOverride[]> {
@@ -171,7 +195,7 @@ class DB {
   }
 
   async getCurrentDay(): Promise<Day | null> {
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD locale
+    const today = new Date().toLocaleDateString('en-CA'); 
     const { data, error } = await supabase.from('days').select('*').eq('date', today).maybeSingle();
     if (error || !data) return null;
     return { 

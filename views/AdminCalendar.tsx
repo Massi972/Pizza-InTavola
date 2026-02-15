@@ -26,6 +26,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const [s, o, d] = await Promise.all([
         db.getSettings(),
@@ -37,8 +38,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setCurrentDay(d);
       setError(null);
     } catch (err: any) {
-      setError("Impossibile caricare le impostazioni. Controlla la connessione.");
-      console.error(err);
+      setError("Impossibile caricare i dati: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -51,21 +51,23 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const toggleDay = async (dayId: string) => {
     if (!settings) return;
     setSavingId(dayId);
+    setError(null);
     
     const currentActive = settings.active_days || [];
     const newActive = currentActive.includes(dayId)
       ? currentActive.filter(d => d !== dayId)
       : [...currentActive, dayId];
 
-    // Aggiornamento locale immediato per reattività
+    // Aggiornamento ottimistico
+    const oldSettings = { ...settings };
     setSettings({ ...settings, active_days: newActive });
 
     try {
       await db.updateSettings({ active_days: newActive });
     } catch (err: any) {
-      setError("Errore nel salvataggio. Riprova tra poco.");
-      // Ripristina lo stato precedente se fallisce
-      setSettings(settings);
+      setError(err.message || "Errore sconosciuto nel salvataggio.");
+      // Rollback se fallisce
+      setSettings(oldSettings);
     } finally {
       setSavingId(null);
     }
@@ -99,9 +101,12 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <div className="space-y-6">
         
         {error && (
-          <div className="p-4 bg-red-50 rounded-2xl border border-red-200 flex items-center gap-3 text-red-600 animate-in fade-in zoom-in duration-300">
-            <AlertCircle size={20} />
-            <p className="text-xs font-bold">{error}</p>
+          <div className="p-4 bg-red-50 rounded-2xl border border-red-200 flex items-start gap-3 text-red-600 animate-in fade-in zoom-in duration-300">
+            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-xs font-black uppercase">Attenzione</p>
+              <p className="text-[11px] font-bold leading-tight">{error}</p>
+            </div>
           </div>
         )}
 
@@ -114,26 +119,27 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           
           <Card className="p-4">
             <p className="text-[11px] text-[#8E8E93] mb-4 font-medium leading-relaxed">
-              Attiva i giorni in cui il sistema deve aprire gli ordini automaticamente ogni settimana.
+              Scegli i giorni in cui il sistema deve essere attivo ogni settimana.
             </p>
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
-                const isActive = settings?.active_days.includes(day.id);
+                const isActive = settings?.active_days?.includes(day.id);
                 const isSaving = savingId === day.id;
                 
                 return (
                   <button
                     key={day.id}
+                    disabled={!!savingId}
                     onClick={() => toggleDay(day.id)}
-                    className={`h-14 rounded-2xl flex flex-col items-center justify-center transition-all relative overflow-hidden active:scale-90 ${
+                    className={`h-14 rounded-2xl flex flex-col items-center justify-center transition-all relative overflow-hidden active:scale-90 disabled:opacity-80 ${
                       isActive 
                         ? 'bg-[#007AFF] text-white shadow-lg' 
                         : 'bg-[#F2F2F7] text-[#8E8E93]'
                     }`}
                   >
                     <span className="text-[10px] font-black uppercase">{day.label}</span>
-                    {isActive && <Check size={14} className="mt-1" />}
-                    {isSaving && <div className="absolute inset-0 bg-white/30 animate-pulse" />}
+                    {isActive && !isSaving && <Check size={14} className="mt-1" />}
+                    {isSaving && <div className="loading-spinner !border-white mt-1 !w-3 !h-3" />}
                   </button>
                 );
               })}
@@ -145,7 +151,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Calendar size={18} className="text-[#34C759]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Test Visivo (Prossimi 14gg)</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima Calendario</p>
           </div>
 
           <div className="space-y-2">
@@ -172,7 +178,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           onClick={loadData}
           className="w-full py-4 flex items-center justify-center gap-2 text-[#007AFF] text-xs font-bold uppercase tracking-widest"
         >
-          <RotateCcw size={14} /> Aggiorna Dati
+          <RotateCcw size={14} /> Ricarica Impostazioni
         </button>
       </div>
     </Layout>
