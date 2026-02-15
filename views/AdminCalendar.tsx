@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { db, GlobalSettings } from '../services/db';
 import { DayOverride, Day } from '../types';
 import { Layout } from '../components/Layout';
-import { Card } from '../components/UI';
-import { Check, ClockIcon, Calendar, AlertCircle, RotateCcw } from '../components/Icons';
+import { Card, Button } from '../components/UI';
+import { Check, ClockIcon, Calendar, AlertCircle, RotateCcw, Copy, X } from '../components/Icons';
 import { formatDate, getDayAvailability } from '../services/utils';
 
 const WEEKDAYS = [
@@ -24,6 +24,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSqlHelp, setShowSqlHelp] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -38,7 +39,11 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setCurrentDay(d);
       setError(null);
     } catch (err: any) {
-      setError("Impossibile caricare i dati: " + err.message);
+      if (err.message.includes("SCHEMA_ERROR")) {
+        setError("DATABASE INCOMPLETO: La colonna 'active_days' non esiste.");
+      } else {
+        setError("Errore caricamento: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,59 +63,87 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ? currentActive.filter(d => d !== dayId)
       : [...currentActive, dayId];
 
-    // Aggiornamento ottimistico
     const oldSettings = { ...settings };
     setSettings({ ...settings, active_days: newActive });
 
     try {
       await db.updateSettings({ active_days: newActive });
     } catch (err: any) {
-      setError(err.message || "Errore sconosciuto nel salvataggio.");
-      // Rollback se fallisce
+      if (err.message.includes("SCHEMA_ERROR") || err.message.includes("active_days")) {
+        setError("ERRORE DATABASE: Devi aggiungere la colonna 'active_days' su Supabase.");
+      } else {
+        setError(err.message || "Errore nel salvataggio.");
+      }
       setSettings(oldSettings);
     } finally {
       setSavingId(null);
     }
   };
 
+  const sqlCommand = "ALTER TABLE settings ADD COLUMN IF NOT EXISTS active_days text[] DEFAULT '{MON, TUE, WED, THU, FRI}';";
+
+  const copySql = () => {
+    navigator.clipboard.writeText(sqlCommand);
+    alert("Comando copiato! Incollalo nell'SQL Editor di Supabase.");
+  };
+
   const getNextTwoWeeks = () => {
     const days = [];
     const now = new Date();
+    // Use settings.active_days or a default fallback to show the loop preview even if DB fails
+    const activeDays = settings?.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+    
     for (let i = 0; i < 14; i++) {
       const d = new Date(now);
       d.setDate(now.getDate() + i);
       const dateStr = d.toLocaleDateString('en-CA');
       days.push({
         dateStr,
-        info: getDayAvailability(dateStr, settings?.active_days || [], overrides, i === 0 ? currentDay : null)
+        info: getDayAvailability(dateStr, activeDays, overrides, i === 0 ? currentDay : null)
       });
     }
     return days;
   };
-
-  if (loading && !settings) {
-    return (
-      <Layout title="Programmazione" onBack={onBack}>
-        <div className="flex justify-center py-20"><div className="loading-spinner !w-10 !h-10" /></div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout title="Loop Settimanale" onBack={onBack}>
       <div className="space-y-6">
         
         {error && (
-          <div className="p-4 bg-red-50 rounded-2xl border border-red-200 flex items-start gap-3 text-red-600 animate-in fade-in zoom-in duration-300">
-            <AlertCircle size={20} className="shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-xs font-black uppercase">Attenzione</p>
-              <p className="text-[11px] font-bold leading-tight">{error}</p>
+          <div className="p-4 bg-red-50 rounded-2xl border border-red-200 space-y-3 animate-in fade-in zoom-in duration-300">
+            <div className="flex items-start gap-3 text-red-600">
+              <AlertCircle size={20} className="shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-xs font-black uppercase">Errore di Configurazione</p>
+                <p className="text-[11px] font-bold leading-tight">{error}</p>
+              </div>
             </div>
+            <Button size="sm" variant="danger" fullWidth onClick={() => setShowSqlHelp(true)} className="!text-[10px] !py-2">
+              Vedi come risolvere (SQL)
+            </Button>
           </div>
         )}
 
-        {/* SELEZIONE LOOP */}
+        {showSqlHelp && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <Card className="w-full max-w-sm p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-black text-sm uppercase">Riparazione Database</h3>
+                <button onClick={() => setShowSqlHelp(false)}><X size={20} /></button>
+              </div>
+              <p className="text-xs text-[#8E8E93] leading-relaxed">
+                Il tuo database non ha lo spazio per salvare i giorni del loop. Esegui questo comando nell'<b>SQL Editor</b> di Supabase:
+              </p>
+              <div className="bg-[#F2F2F7] p-3 rounded-xl font-mono text-[10px] break-all border border-[#C6C6C8] select-all">
+                {sqlCommand}
+              </div>
+              <Button fullWidth onClick={copySql}>
+                <Copy size={16} /> Copia Comando SQL
+              </Button>
+            </Card>
+          </div>
+        )}
+
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <ClockIcon size={18} className="text-[#007AFF]" />
@@ -119,11 +152,11 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           
           <Card className="p-4">
             <p className="text-[11px] text-[#8E8E93] mb-4 font-medium leading-relaxed">
-              Scegli i giorni in cui il sistema deve essere attivo ogni settimana.
+              Attiva i giorni ricorrenti. Nota: se vedi l'errore sopra, le modifiche non verranno salvate finché non aggiorni il database.
             </p>
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
-                const isActive = settings?.active_days?.includes(day.id);
+                const isActive = (settings?.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI']).includes(day.id);
                 const isSaving = savingId === day.id;
                 
                 return (
@@ -147,11 +180,10 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </Card>
         </section>
 
-        {/* PREVIEW 14 GIORNI */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Calendar size={18} className="text-[#34C759]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima Calendario</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima (Loop Attivo)</p>
           </div>
 
           <div className="space-y-2">
@@ -178,7 +210,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           onClick={loadData}
           className="w-full py-4 flex items-center justify-center gap-2 text-[#007AFF] text-xs font-bold uppercase tracking-widest"
         >
-          <RotateCcw size={14} /> Ricarica Impostazioni
+          <RotateCcw size={14} /> Ricarica Dati
         </button>
       </div>
     </Layout>

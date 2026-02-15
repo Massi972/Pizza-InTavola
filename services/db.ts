@@ -27,10 +27,11 @@ class DB {
   private async handleError(error: any, context: string) {
     console.error(`Dettaglio Errore [${context}]:`, error);
     const msg = error.message || "Errore sconosciuto";
-    // Se l'errore indica una colonna mancante, diamo un suggerimento chiaro
-    if (msg.includes("column") && msg.includes("not found")) {
-      throw new Error(`${context}: Manca la colonna 'active_days' nella tabella 'settings'. Controlla lo schema SQL.`);
+    
+    if (msg.includes("active_days") || (msg.includes("column") && msg.includes("not found"))) {
+      throw new Error(`SCHEMA_ERROR: La colonna 'active_days' manca nella tabella 'settings'.`);
     }
+    
     throw new Error(`${context}: ${msg}`);
   }
 
@@ -46,15 +47,11 @@ class DB {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
       
       if (error) {
-        console.warn("Errore durante il fetch settings, uso i default:", error.message);
+        if (error.message.includes('active_days')) throw error;
         return defaults;
       }
 
-      if (!data) {
-        // Se non esiste il record 'global', proviamo a crearlo con i default
-        await supabase.from('settings').insert([{ id: 'global', ...defaults }]);
-        return defaults;
-      }
+      if (!data) return defaults;
       
       return {
         master_code: data.master_code || defaults.master_code,
@@ -62,25 +59,21 @@ class DB {
         manager_phone: data.manager_phone || '',
         active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days
       };
-    } catch (err) {
-      console.error("Fallimento critico getSettings:", err);
+    } catch (err: any) {
+      if (err.message.includes('active_days')) {
+        await this.handleError(err, "Caricamento impostazioni");
+      }
       return defaults;
     }
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
-    // Rimuoviamo eventuali undefined per evitare errori Supabase
     const payload = JSON.parse(JSON.stringify(settings));
-    
-    const { error } = await supabase
-      .from('settings')
-      .upsert({ id: 'global', ...payload }, { onConflict: 'id' });
-
-    if (error) {
-      await this.handleError(error, "Salvataggio impostazioni");
-    }
+    const { error } = await supabase.from('settings').upsert({ id: 'global', ...payload }, { onConflict: 'id' });
+    if (error) await this.handleError(error, "Salvataggio impostazioni");
   }
 
+  // ... (rimanenti metodi del db.ts restano invariati)
   async getOverrides(): Promise<DayOverride[]> {
     const { data, error } = await supabase.from('day_overrides').select('*').order('date', { ascending: true });
     if (error) return [];
@@ -226,7 +219,7 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*').eq('day_id', dayId);
     if (error) return [];
     return (data || []).map(o => ({ 
-      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
+      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slot_time: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
       note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
@@ -238,13 +231,14 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slotTime: data.slot_time as SlotTime,
+      id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slot_time: data.slot_time as SlotTime,
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
       note: data.note || '', createdAt: data.created_at, updatedAt: data.updated_at 
     };
   }
 
+  // Fix: changed order.add_modification_ids to order.addModificationIds and order.remove_modification_ids to order.removeModificationIds
   async saveOrder(order: Partial<Order>): Promise<void> {
     const todayDate = new Date().toLocaleDateString('en-CA');
     let dayId = order.dayId;
