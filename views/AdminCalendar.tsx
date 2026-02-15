@@ -4,7 +4,7 @@ import { db, GlobalSettings } from '../services/db';
 import { DayOverride, OverrideType, Day } from '../types';
 import { Layout } from '../components/Layout';
 import { Card, Button } from '../components/UI';
-import { Calendar, Trash2, Check, ClockIcon, X, Unlock, Lock, RotateCcw } from '../components/Icons';
+import { Calendar, Check, ClockIcon, Lock, Unlock, RotateCcw, AlertCircle } from '../components/Icons';
 import { formatDate, getDayAvailability } from '../services/utils';
 
 const WEEKDAYS = [
@@ -23,9 +23,9 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [currentDayRecord, setCurrentDayRecord] = useState<Day | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const [s, o, d] = await Promise.all([
         db.getSettings(),
@@ -35,8 +35,9 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setSettings(s);
       setOverrides(o);
       setCurrentDayRecord(d);
-    } catch (err) {
-      console.error(err);
+      setError(null);
+    } catch (err: any) {
+      setError("Errore durante il caricamento dei dati: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -48,16 +49,24 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const toggleRecurringDay = async (dayId: string) => {
     if (!settings) return;
+    setActionLoading('recurring');
+    
     const active = settings.active_days || [];
     const newActive = active.includes(dayId) 
       ? active.filter(d => d !== dayId) 
       : [...active, dayId];
     
+    // Aggiornamento ottimistico della UI
+    setSettings({ ...settings, active_days: newActive });
+
     try {
       await db.updateSettings({ active_days: newActive });
-      setSettings({ ...settings, active_days: newActive });
     } catch (err) {
-      alert("Errore salvataggio ricorrenza");
+      setError("Errore durante il salvataggio della ricorrenza.");
+      // Rollback UI se fallisce
+      setSettings(settings);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -67,20 +76,20 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const existingOverride = overrides.find(o => o.date === dateStr);
       
       if (existingOverride) {
-        // Se esiste già un'eccezione, la rimuoviamo (ripristina default)
+        // Ripristina default se esiste già un'eccezione
         await db.deleteOverride(existingOverride.id);
       } else {
-        // Se non esiste, creiamo l'eccezione opposta allo stato attuale
+        // Crea eccezione
         const newType = currentStatus.isActive ? OverrideType.DISABLED : OverrideType.EXTRA;
         await db.saveOverride({
           date: dateStr,
           type: newType,
-          note: 'Manuale da calendario'
+          note: 'Manuale'
         });
       }
       await fetchData();
     } catch (err) {
-      alert("Errore nell'aggiornamento della data");
+      setError("Errore nell'aggiornamento dell'eccezione.");
     } finally {
       setActionLoading(null);
     }
@@ -92,7 +101,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     for (let i = 0; i < 14; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      const dStr = d.toISOString().split('T')[0];
+      const dStr = d.toLocaleDateString('en-CA');
       days.push({
         dateStr: dStr,
         availability: getDayAvailability(dStr, settings?.active_days || [], overrides, i === 0 ? currentDayRecord : null)
@@ -101,47 +110,65 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return days;
   };
 
-  if (loading && !settings) return <Layout title="Calendario" onBack={onBack}><div className="flex justify-center py-20"><div className="loading-spinner" /></div></Layout>;
+  if (loading && !settings) {
+    return (
+      <Layout title="Programmazione" onBack={onBack}>
+        <div className="flex justify-center py-20"><div className="loading-spinner !w-10 !h-10" /></div>
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="Gestione Date" onBack={onBack}>
+    <Layout title="Calendario Ricorrente" onBack={onBack}>
       <div className="space-y-8 pb-10">
         
-        {/* Sezione Giorni Ricorrenti */}
+        {/* MESSAGGI DI ERRORE */}
+        {error && (
+          <div className="bg-red-50 p-4 rounded-2xl border border-red-200 flex items-center gap-3 text-red-600 animate-in fade-in zoom-in duration-300">
+            <AlertCircle size={20} />
+            <p className="text-xs font-bold">{error}</p>
+          </div>
+        )}
+
+        {/* LOOP SETTIMANALE */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <ClockIcon size={18} className="text-[#007AFF]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Programma Settimanale (Loop)</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Giorni di Attività (Loop)</p>
           </div>
-          <Card className="p-4">
+          <Card className="p-4 bg-white/50 backdrop-blur-sm border border-white/40">
+            <p className="text-[11px] text-[#8E8E93] mb-4 font-medium leading-relaxed">
+              Tocca i giorni della settimana per attivare l'ordinazione automatica ricorrente.
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
                 const isActive = settings?.active_days.includes(day.id);
                 return (
                   <button
                     key={day.id}
+                    disabled={actionLoading === 'recurring'}
                     onClick={() => toggleRecurringDay(day.id)}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-black transition-all border-2 flex items-center justify-center gap-2 ${
+                    className={`px-3 py-3 rounded-2xl text-[11px] font-black transition-all border-2 flex items-center justify-center gap-2 relative overflow-hidden active:scale-95 ${
                       isActive 
-                        ? 'bg-[#007AFF] text-white border-[#007AFF]' 
+                        ? 'bg-[#007AFF] text-white border-[#007AFF] shadow-md' 
                         : 'bg-white text-[#8E8E93] border-[#F2F2F7] shadow-sm'
                     }`}
                   >
-                    {isActive && <Check size={14} />}
+                    {isActive ? <Check size={14} /> : null}
                     {day.label}
+                    {actionLoading === 'recurring' && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
                   </button>
                 );
               })}
             </div>
-            <p className="text-[9px] text-[#8E8E93] mt-3 italic text-center">I giorni selezionati saranno aperti automaticamente ogni settimana.</p>
           </Card>
         </section>
 
-        {/* Prossimi 14 Giorni Interattivi */}
+        {/* PREVIEW CALENDARIO */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Calendar size={18} className="text-[#34C759]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Calendario Prossime 2 Settimane</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Prossime 2 Settimane</p>
           </div>
           
           <div className="space-y-3">
@@ -150,27 +177,29 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               const isToday = availability.isToday;
 
               return (
-                <Card key={dateStr} className={`p-4 flex flex-col gap-3 transition-all ${isToday ? 'ring-2 ring-[#007AFF] ring-inset' : ''}`}>
+                <Card key={dateStr} className={`p-4 flex flex-col gap-4 border-2 transition-all ${
+                  isToday ? 'border-[#007AFF] bg-white' : 'border-transparent bg-white/60'
+                }`}>
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-2">
                          <span className="text-sm font-black text-[#1c1c1e]">{formatDate(dateStr)}</span>
-                         {isToday && <span className="bg-[#007AFF] text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase">Oggi</span>}
+                         {isToday && <span className="bg-[#007AFF] text-white text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Oggi</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${availability.colorClass}`}>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight ${availability.colorClass}`}>
                           {availability.label}
                         </span>
                         {hasOverride && (
-                          <span className="text-[8px] font-bold text-[#5856D6] uppercase flex items-center gap-0.5">
-                            <RotateCcw size={10} /> Eccezione Attiva
+                          <span className="text-[9px] font-bold text-[#5856D6] flex items-center gap-0.5 uppercase">
+                            <RotateCcw size={11} /> Manuale
                           </span>
                         )}
                       </div>
                     </div>
                     
-                    <div className="text-right">
-                       <span className={`text-[10px] font-black uppercase ${availability.isActive ? 'text-green-500' : 'text-red-500'}`}>
+                    <div className="flex flex-col items-end gap-1">
+                       <span className={`text-[10px] font-black uppercase tracking-tighter ${availability.isActive ? 'text-green-500' : 'text-red-500'}`}>
                          {availability.isActive ? '● Aperto' : '● Chiuso'}
                        </span>
                     </div>
@@ -182,32 +211,33 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         fullWidth 
                         size="sm" 
                         variant="danger" 
-                        className="!rounded-xl !text-[10px] !py-2"
-                        disabled={actionLoading === dateStr}
+                        className="!rounded-2xl !text-[10px] !py-2.5 !bg-[#FF3B30] active:!bg-[#D70015]"
+                        disabled={!!actionLoading}
                         onClick={() => handleToggleOverride(dateStr, availability)}
                       >
-                        {actionLoading === dateStr ? <div className="loading-spinner border-white" /> : <><Lock size={14} /> Forza Chiusura</>}
+                        {actionLoading === dateStr ? <div className="loading-spinner !border-white" /> : <><Lock size={14} /> Disattiva Data</>}
                       </Button>
                     ) : (
                       <Button 
                         fullWidth 
                         size="sm" 
                         variant="primary" 
-                        className="!rounded-xl !text-[10px] !py-2 !bg-[#34C759]"
-                        disabled={actionLoading === dateStr}
+                        className="!rounded-2xl !text-[10px] !py-2.5 !bg-[#34C759] active:!bg-[#248A3D]"
+                        disabled={!!actionLoading}
                         onClick={() => handleToggleOverride(dateStr, availability)}
                       >
-                        {actionLoading === dateStr ? <div className="loading-spinner border-white" /> : <><Unlock size={14} /> Forza Apertura</>}
+                        {actionLoading === dateStr ? <div className="loading-spinner !border-white" /> : <><Unlock size={14} /> Attiva Extra</>}
                       </Button>
                     )}
                     
                     {hasOverride && (
                       <button 
+                        disabled={!!actionLoading}
                         onClick={() => handleToggleOverride(dateStr, availability)}
-                        className="p-2 bg-[#F2F2F7] text-[#8E8E93] rounded-xl active:bg-[#E5E5EA]"
-                        title="Ripristina Default"
+                        className="p-2 bg-[#F2F2F7] text-[#8E8E93] rounded-2xl active:bg-[#E5E5EA] transition-colors border border-[#C6C6C8]"
+                        title="Ripristina Loop"
                       >
-                        <RotateCcw size={18} />
+                        <RotateCcw size={20} />
                       </button>
                     )}
                   </div>

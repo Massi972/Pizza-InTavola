@@ -26,19 +26,26 @@ export interface GlobalSettings {
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Error in ${context}:`, error);
-    const msg = error.message || "Errore sconosciuto";
-    throw new Error(`${context}: ${msg}`);
+    throw new Error(`${context}: ${error.message || "Errore sconosciuto"}`);
   }
 
   async getSettings(): Promise<GlobalSettings> {
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '', active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] }; 
+      const defaults: GlobalSettings = { 
+        master_code: 'PIZZA2025', 
+        override_cutoff: false, 
+        manager_phone: '', 
+        active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] 
+      };
+      
+      if (error || !data) return defaults;
+      
       return {
-        master_code: data.master_code,
+        master_code: data.master_code || defaults.master_code,
         override_cutoff: !!data.override_cutoff,
         manager_phone: data.manager_phone || '',
-        active_days: data.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI']
+        active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days
       };
     } catch {
       return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '', active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] };
@@ -47,16 +54,12 @@ class DB {
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
-    if (error) await this.handleError(error, "Aggiornamento impostazioni");
+    if (error) await this.handleError(error, "Salvataggio impostazioni");
   }
 
-  // Day Overrides
   async getOverrides(): Promise<DayOverride[]> {
     const { data, error } = await supabase.from('day_overrides').select('*').order('date', { ascending: true });
-    if (error) {
-       if (error.code === '42P01') return [];
-       await this.handleError(error, "Caricamento eccezioni");
-    }
+    if (error) return [];
     return data || [];
   }
 
@@ -74,49 +77,31 @@ class DB {
     const { data, error } = await supabase.from('users').select('*').order('last_name', { ascending: true });
     if (error) await this.handleError(error, "Caricamento utenti");
     return data.map(u => ({ 
-      id: u.id, 
-      firstName: u.first_name, 
-      lastName: u.last_name, 
-      email: u.email || '', 
-      phone_e164: u.phone_e164 || '',
-      pin: u.pin, 
-      role: u.role, 
-      active: u.active 
+      id: u.id, firstName: u.first_name, lastName: u.last_name, 
+      phone_e164: u.phone_e164 || '', pin: u.pin, role: u.role, active: u.active 
     }));
   }
 
   async getUserByPin(pin: string): Promise<User | null> {
-    if (!pin) return null;
     const { data, error } = await supabase.from('users').select('*').eq('pin', pin).eq('active', true).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, 
-      firstName: data.first_name, 
-      lastName: data.last_name, 
-      email: data.email || '',
-      phone_e164: data.phone_e164 || '',
-      pin: data.pin, 
-      role: data.role, 
-      active: data.active 
+      id: data.id, firstName: data.first_name, lastName: data.last_name, 
+      phone_e164: data.phone_e164 || '', pin: data.pin, role: data.role, active: data.active 
     };
   }
 
   async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
     let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
     if (excludeUserId) query = query.neq('id', excludeUserId);
-    const { data, error } = await query.maybeSingle();
-    return error ? true : !data;
+    const { data } = await query.maybeSingle();
+    return !data;
   }
 
   async saveUser(user: Partial<User>): Promise<void> {
     const payload = { 
-      first_name: user.firstName, 
-      last_name: user.lastName, 
-      email: user.email?.toLowerCase().trim(), 
-      phone_e164: user.phone_e164?.replace(/\s/g, ''),
-      pin: user.pin, 
-      role: user.role, 
-      active: user.active 
+      first_name: user.firstName, last_name: user.lastName, 
+      phone_e164: user.phone_e164, pin: user.pin, role: user.role, active: user.active 
     };
     const { error } = user.id 
       ? await supabase.from('users').update(payload).eq('id', user.id)
@@ -133,24 +118,17 @@ class DB {
     const { data, error } = await supabase.from('pizzas').select('*').order('name', { ascending: true });
     if (error) await this.handleError(error, "Caricamento pizze");
     return data.map(p => ({ 
-      id: p.id, 
-      name: p.name, 
-      description: p.description || '', 
-      ingredients: p.ingredients || [], 
-      allergens: p.allergens || [], 
-      active: p.active, 
-      isVegetarian: p.is_vegetarian 
+      id: p.id, name: p.name, description: p.description || '', 
+      ingredients: p.ingredients || [], allergens: p.allergens || [], 
+      active: p.active, isVegetarian: p.is_vegetarian 
     }));
   }
 
   async savePizza(pizza: Partial<Pizza>): Promise<void> {
-    const payload: any = { 
-      name: pizza.name, 
-      description: pizza.description || '', 
-      ingredients: pizza.ingredients || [], 
-      allergens: pizza.allergens || [], 
-      active: pizza.active !== false, 
-      is_vegetarian: pizza.isVegetarian || false 
+    const payload = { 
+      name: pizza.name, description: pizza.description || '', 
+      ingredients: pizza.ingredients || [], allergens: pizza.allergens || [], 
+      active: pizza.active !== false, is_vegetarian: pizza.isVegetarian || false 
     };
     const { error } = pizza.id
       ? await supabase.from('pizzas').update(payload).eq('id', pizza.id)
@@ -165,26 +143,14 @@ class DB {
 
   async getModifications(): Promise<Modification[]> {
     const { data, error } = await supabase.from('modifications').select('*').order('sort_order', { ascending: true });
-    if (error) {
-      if (error.code === '42P01') return [];
-      await this.handleError(error, "Caricamento varianti");
-    }
+    if (error) return [];
     return (data || []).map(m => ({
-      id: m.id,
-      name: m.name,
-      type: m.type as 'ADD' | 'REMOVE',
-      active: m.active,
-      sort_order: m.sort_order
+      id: m.id, name: m.name, type: m.type as 'ADD' | 'REMOVE', active: m.active, sort_order: m.sort_order
     }));
   }
 
   async saveModification(mod: Partial<Modification>): Promise<void> {
-    const payload = {
-      name: mod.name,
-      type: mod.type,
-      active: mod.active !== false,
-      sort_order: mod.sort_order || 0
-    };
+    const payload = { name: mod.name, type: mod.type, active: mod.active !== false, sort_order: mod.sort_order || 0 };
     const { error } = mod.id
       ? await supabase.from('modifications').update(payload).eq('id', mod.id)
       : await supabase.from('modifications').insert([payload]);
@@ -198,112 +164,65 @@ class DB {
 
   async getDays(): Promise<Day[]> {
     const { data, error } = await supabase.from('days').select('*').order('date', { ascending: false });
-    if (error) await this.handleError(error, "Caricamento giorni");
+    if (error) return [];
     return data.map(d => ({ 
-      id: d.id, 
-      date: d.date, 
-      status: d.status, 
-      openedAt: d.opened_at, 
-      closedAt: d.closed_at 
+      id: d.id, date: d.date, status: d.status, openedAt: d.opened_at, closedAt: d.closed_at 
     }));
   }
 
   async getCurrentDay(): Promise<Day | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD locale
     const { data, error } = await supabase.from('days').select('*').eq('date', today).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, 
-      date: data.date, 
-      status: data.status, 
-      openedAt: data.opened_at, 
-      closedAt: data.closed_at 
+      id: data.id, date: data.date, status: data.status, openedAt: data.opened_at, closedAt: data.closed_at 
     };
   }
 
   async openDay(): Promise<Day> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const { data, error } = await supabase.from('days').upsert({ 
-      date: today, 
-      status: 'OPEN', 
-      opened_at: new Date().toISOString() 
+      date: today, status: 'OPEN', opened_at: new Date().toISOString() 
     }, { onConflict: 'date' }).select().single();
     if (error) await this.handleError(error, "Apertura giornata");
     return { 
-      id: data.id, 
-      date: data.date, 
-      status: data.status, 
-      openedAt: data.opened_at, 
-      closedAt: data.closed_at 
+      id: data.id, date: data.date, status: data.status, openedAt: data.opened_at, closedAt: data.closed_at 
     };
   }
 
   async closeDay(): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const { error } = await supabase.from('days').update({ 
-      status: 'CLOSED', 
-      closed_at: new Date().toISOString() 
+      status: 'CLOSED', closed_at: new Date().toISOString() 
     }).eq('date', today);
     if (error) await this.handleError(error, "Chiusura giornata");
   }
 
   async getOrdersByDay(dayId: string): Promise<Order[]> {
     const { data, error } = await supabase.from('orders').select('*').eq('day_id', dayId);
-    if (error) await this.handleError(error, "Caricamento ordini");
+    if (error) return [];
     return (data || []).map(o => ({ 
-      id: o.id, 
-      dayId: o.day_id, 
-      userId: o.user_id, 
-      pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime,
+      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
-      note: o.note || '', 
-      createdAt: o.created_at, 
-      updatedAt: o.updated_at 
+      note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
     }));
   }
 
   async getUserOrderToday(userId: string): Promise<Order | null> {
-    const currentDay = await this.getCurrentDay();
-    if (!currentDay) {
-        // Se non c'è un record in days, proviamo a cercarlo comunque via data se l'utente ha già ordinato
-        const today = new Date().toISOString().split('T')[0];
-        const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
-        if (error || !data) return null;
-        return { 
-          id: data.id, 
-          dayId: data.day_id, 
-          userId: data.user_id, 
-          pizzaId: data.pizza_id, 
-          slotTime: data.slot_time as SlotTime,
-          addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
-          removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
-          note: data.note || '', 
-          createdAt: data.created_at, 
-          updatedAt: data.updated_at 
-        };
-    }
-    const { data, error } = await supabase.from('orders').select('*').eq('user_id', userId).eq('day_id', currentDay.id).maybeSingle();
+    const today = new Date().toLocaleDateString('en-CA');
+    const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, 
-      dayId: data.day_id, 
-      userId: data.user_id, 
-      pizzaId: data.pizza_id, 
-      slotTime: data.slot_time as SlotTime,
+      id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slotTime: data.slot_time as SlotTime,
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
-      note: data.note || '', 
-      createdAt: data.created_at, 
-      updatedAt: data.updated_at 
+      note: data.note || '', createdAt: data.created_at, updatedAt: data.updated_at 
     };
   }
 
   async saveOrder(order: Partial<Order>): Promise<void> {
-    // Prima di salvare l'ordine, ci assicuriamo che esista la giornata in 'days'
-    // Questo è fondamentale per gli ordini ricorrenti automatici
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = new Date().toLocaleDateString('en-CA');
     let dayId = order.dayId;
     
     if (!dayId) {
@@ -313,14 +232,10 @@ class DB {
     }
 
     const payload = { 
-      day_id: dayId, 
-      user_id: order.userId, 
-      pizza_id: order.pizzaId, 
-      slot_time: order.slotTime, 
+      day_id: dayId, user_id: order.userId, pizza_id: order.pizzaId, slot_time: order.slotTime, 
       add_modification_ids: order.addModificationIds || [],
       remove_modification_ids: order.removeModificationIds || [],
-      note: order.note || '',
-      updated_at: new Date().toISOString() 
+      note: order.note || '', updated_at: new Date().toISOString() 
     };
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
