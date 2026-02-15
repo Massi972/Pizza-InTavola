@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Pizza, Order, SlotTime, DayStatus, Modification, Role } from '../types';
-import { db } from '../services/db';
+import { User, Pizza, Order, SlotTime, DayStatus, Modification, Role, DayOverride } from '../types';
+import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, SegmentedControl, Input } from '../components/UI';
 import { 
@@ -15,11 +15,12 @@ import {
   Settings, 
   UserIcon,
   LogOut,
-  Sliders
+  Sliders,
+  Fingerprint
 } from '../components/Icons';
-import { isBeforeCutoff } from '../services/utils';
+import { isBeforeCutoff, getDayAvailability } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
-import { isBiometricAvailable } from '../services/biometrics';
+import { isBiometricAvailable, registerBiometrics } from '../services/biometrics';
 
 interface WorkerDashboardProps {
   user: User;
@@ -34,7 +35,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [modifications, setModifications] = useState<Modification[]>([]);
   const [currentDay, setCurrentDay] = useState<any>(null);
-  const [overrideActive, setOverrideActive] = useState(false);
+  const [settings, setSettings] = useState<GlobalSettings | null>(null);
+  const [overrides, setOverrides] = useState<DayOverride[]>([]);
   const [myOrder, setMyOrder] = useState<Order | null>(null);
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
@@ -48,6 +50,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [isBioSupported, setIsBioSupported] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_biometric_enabled') === 'true');
 
   const addOptions = modifications.filter(m => m.type === 'ADD' && m.active);
   const removeOptions = modifications.filter(m => m.type === 'REMOVE' && m.active);
@@ -60,28 +63,40 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     checkBio();
   }, []);
 
+  // Determina se oggi è possibile ordinare
+  const availability = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return getDayAvailability(
+        today, 
+        settings?.active_days || [], 
+        overrides, 
+        currentDay
+    );
+  }, [settings, overrides, currentDay]);
+
   const canOrder = useMemo(() => {
-    if (!currentDay || currentDay.status !== DayStatus.OPEN) return false;
-    if (overrideActive) return true;
-    return isBeforeCutoff();
-  }, [currentDay, overrideActive]);
+    if (settings?.override_cutoff) return true; // Master override per admin debugging
+    return availability.isActive;
+  }, [availability, settings]);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [pizzaList, modList, day, order, settings] = await Promise.all([
+        const [pizzaList, modList, day, order, globalSettings, dayOverrides] = await Promise.all([
           db.getPizzas(),
           db.getModifications(),
           db.getCurrentDay(),
           db.getUserOrderToday(user.id),
-          db.getSettings()
+          db.getSettings(),
+          db.getOverrides()
         ]);
         setPizzas(pizzaList.filter(p => p.active));
         setModifications(modList || []);
         setCurrentDay(day);
         setMyOrder(order);
-        setOverrideActive(settings.override_cutoff);
+        setSettings(globalSettings);
+        setOverrides(dayOverrides);
       } catch (err: any) {
         setErrorMessage(err.message || "Errore nel caricamento dei dati");
       } finally {
@@ -90,6 +105,28 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     };
     fetchData();
   }, [user.id]);
+
+  const handleToggleBiometrics = async () => {
+    if (biometricEnabled) {
+      localStorage.removeItem('pizzastaff_stored_pin');
+      localStorage.setItem('pizzastaff_biometric_enabled', 'false');
+      setBiometricEnabled(false);
+    } else {
+      try {
+        const success = await registerBiometrics(user.id, user.firstName);
+        if (success) {
+          localStorage.setItem('pizzastaff_stored_pin', user.pin);
+          localStorage.setItem('pizzastaff_biometric_enabled', 'true');
+          localStorage.removeItem('pizzastaff_biometric_declined');
+          setBiometricEnabled(true);
+        } else {
+          setErrorMessage("Registrazione biometrica non riuscita.");
+        }
+      } catch (err) {
+        setErrorMessage("Errore durante l'attivazione della biometria.");
+      }
+    }
+  };
 
   const handleToggleAdd = (id: string) => {
     setSelectedAddIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -100,13 +137,13 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   };
 
   const handleConfirmOrder = async () => {
-    if (!selectedPizza || !currentDay) return;
+    if (!selectedPizza) return;
     setSubmitting(true);
     setErrorMessage(null);
     try {
       const order: Partial<Order> = {
         id: myOrder?.id,
-        dayId: currentDay.id,
+        dayId: currentDay?.id, // Può essere null, db.saveOrder creerà la giornata
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
@@ -116,11 +153,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       };
       await db.saveOrder(order);
       
-      // Mostra l'overlay di successo
       setShowSuccess(true);
       setSelectedPizza(null);
       
-      // Logout automatico dopo 2 secondi per tornare al PIN
       setTimeout(() => {
         onLogout();
       }, 2000);
@@ -145,23 +180,33 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       p.ingredients?.some(i => i.toLowerCase().includes(search.toLowerCase()))
     );
 
+    const isAfterCutoff = !isBeforeCutoff();
+    const showClosedMessage = !canOrder;
+
     return (
       <div className="space-y-6">
-        {!canOrder && currentDay && (
-          <div className="bg-[#FF3B30] text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg">
-            <Lock size={24} />
+        {showClosedMessage && (
+          <div className="bg-[#FF3B30] text-white p-5 rounded-2xl flex items-center gap-4 shadow-xl animate-in slide-in-from-top-4 duration-300">
+            <div className="p-3 bg-white/20 rounded-full">
+                <Lock size={28} />
+            </div>
             <div>
-              <p className="font-bold">Ordini chiusi 🔒</p>
-              <p className="text-xs opacity-90">Oltre l'orario limite (16:30).</p>
+              <p className="font-black text-lg tracking-tight">Servizio non attivo</p>
+              <p className="text-xs font-medium opacity-90 leading-tight">
+                {isAfterCutoff && availability.isActive === false && availability.label.includes('Cutoff')
+                    ? "Gli ordini sono chiusi dopo le 16:30."
+                    : "Oggi non è prevista l'ordinazione delle pizze staff."
+                }
+              </p>
             </div>
           </div>
         )}
 
         {myOrder && !selectedPizza && !isEditing && (
-          <Card className={`p-5 border-2 ${overrideActive ? 'border-[#5856D6]' : 'border-[#34C759]'}`}>
+          <Card className={`p-5 border-2 ${availability.isActive ? 'border-[#34C759]' : 'border-[#C6C6C8] opacity-80 grayscale'}`}>
             <div className="flex justify-between items-start mb-4">
               <div>
-                <p className={`text-[10px] font-black ${overrideActive ? 'text-[#5856D6]' : 'text-[#34C759]'} uppercase tracking-widest mb-1`}>Prenotazione Attiva</p>
+                <p className={`text-[10px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-widest mb-1`}>La tua scelta per oggi</p>
                 <h2 className="text-2xl font-black">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {myOrder.addModificationIds?.map(id => {
@@ -197,8 +242,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         )}
 
         {(!myOrder || isEditing) && !selectedPizza && (
-          <>
-            <div className="relative">
+          <div className={`${!canOrder ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93]" size={18} />
               <Input 
                 placeholder="Cerca la tua pizza..." 
@@ -223,7 +268,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </Card>
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
     );
@@ -236,7 +281,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       title={activeTab === 'menu' ? 'Menu Pizze' : 'Impostazioni'}
       onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}
     >
-      {/* Overlay di Successo con segnale "Pizza ordinata" */}
       {showSuccess && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/80 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-500">
@@ -264,21 +308,62 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             <h2 className="text-xl font-black">{user.firstName} {user.lastName}</h2>
             <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest mt-1">{user.role}</p>
           </div>
-          <Card>
-            <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold">
-              <span>Esci</span>
-              <LogOut size={20} />
-            </button>
-          </Card>
 
-          {isManagement && onBackToAdmin && (
-            <Card className="border-2 border-[#5856D6]">
-              <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold">
-                <span>Pannello Admin</span>
-                <Sliders size={20} />
-              </button>
+          <section className="space-y-2">
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest pl-2">Accesso Rapido</p>
+            <Card className="divide-y divide-[#F2F2F7]">
+              {isBioSupported ? (
+                <div className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${biometricEnabled ? 'bg-green-100 text-green-600' : 'bg-[#F2F2F7] text-[#8E8E93]'}`}>
+                      <Fingerprint size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">Face ID / Touch ID</p>
+                      <p className="text-[10px] text-[#8E8E93] uppercase font-black">Accedi senza PIN</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleToggleBiometrics}
+                    className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${
+                      biometricEnabled ? 'bg-[#34C759]' : 'bg-[#C6C6C8]'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                      biometricEnabled ? 'translate-x-6' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 flex items-center gap-3 opacity-50">
+                   <div className="p-2 rounded-full bg-gray-100 text-gray-400">
+                      <Fingerprint size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">Biometria non supportata</p>
+                      <p className="text-[10px] text-[#8E8E93] uppercase font-black">Browser o hardware limitato</p>
+                    </div>
+                </div>
+              )}
             </Card>
-          )}
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest pl-2">Account</p>
+            <Card className="divide-y divide-[#F2F2F7]">
+              <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold active:bg-[#F2F2F7] transition-colors">
+                <span>Esci dall'app</span>
+                <LogOut size={20} />
+              </button>
+
+              {isManagement && onBackToAdmin && (
+                <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold active:bg-[#F2F2F7] transition-colors">
+                  <span>Pannello Admin</span>
+                  <Sliders size={20} />
+                </button>
+              )}
+            </Card>
+          </section>
         </div>
       )}
 

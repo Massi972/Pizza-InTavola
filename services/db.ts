@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification } from '../types';
+import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
 
 const getEnvVar = (name: string, fallback: string): string => {
   try {
@@ -19,24 +19,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export interface GlobalSettings {
   master_code: string;
   override_cutoff: boolean;
-  manager_phone?: string; 
+  manager_phone?: string;
+  active_days: string[]; // ['MON', 'TUE', ...]
 }
 
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Error in ${context}:`, error);
-    
-    // Errore tabella mancante
-    if (error.code === '42P01') {
-      throw new Error(`DATABASE ERROR: La tabella "${error.message.split('"')[1]}" non esiste. Esegui il setup SQL in Supabase.`);
-    }
-    
-    // Errore colonna mancante (il tuo errore attuale)
-    if (error.code === '42703') {
-      const missingCol = error.message.split('"')[1];
-      throw new Error(`SCHEMA ERROR: Manca la colonna "${missingCol}" nella tabella degli ordini. Devi eseguire l'ALTER TABLE in Supabase per supportare le variazioni multiple.`);
-    }
-
     const msg = error.message || "Errore sconosciuto";
     throw new Error(`${context}: ${msg}`);
   }
@@ -44,20 +33,41 @@ class DB {
   async getSettings(): Promise<GlobalSettings> {
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' }; 
+      if (error || !data) return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '', active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] }; 
       return {
         master_code: data.master_code,
         override_cutoff: !!data.override_cutoff,
-        manager_phone: data.manager_phone || ''
+        manager_phone: data.manager_phone || '',
+        active_days: data.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI']
       };
     } catch {
-      return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '' };
+      return { master_code: 'PIZZA2025', override_cutoff: false, manager_phone: '', active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] };
     }
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
     if (error) await this.handleError(error, "Aggiornamento impostazioni");
+  }
+
+  // Day Overrides
+  async getOverrides(): Promise<DayOverride[]> {
+    const { data, error } = await supabase.from('day_overrides').select('*').order('date', { ascending: true });
+    if (error) {
+       if (error.code === '42P01') return [];
+       await this.handleError(error, "Caricamento eccezioni");
+    }
+    return data || [];
+  }
+
+  async saveOverride(override: Partial<DayOverride>): Promise<void> {
+    const { error } = await supabase.from('day_overrides').upsert(override, { onConflict: 'date' });
+    if (error) await this.handleError(error, "Salvataggio eccezione");
+  }
+
+  async deleteOverride(id: string): Promise<void> {
+    const { error } = await supabase.from('day_overrides').delete().eq('id', id);
+    if (error) await this.handleError(error, "Eliminazione eccezione");
   }
 
   async getUsers(): Promise<User[]> {
@@ -256,7 +266,24 @@ class DB {
 
   async getUserOrderToday(userId: string): Promise<Order | null> {
     const currentDay = await this.getCurrentDay();
-    if (!currentDay) return null;
+    if (!currentDay) {
+        // Se non c'è un record in days, proviamo a cercarlo comunque via data se l'utente ha già ordinato
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
+        if (error || !data) return null;
+        return { 
+          id: data.id, 
+          dayId: data.day_id, 
+          userId: data.user_id, 
+          pizzaId: data.pizza_id, 
+          slotTime: data.slot_time as SlotTime,
+          addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
+          removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
+          note: data.note || '', 
+          createdAt: data.created_at, 
+          updatedAt: data.updated_at 
+        };
+    }
     const { data, error } = await supabase.from('orders').select('*').eq('user_id', userId).eq('day_id', currentDay.id).maybeSingle();
     if (error || !data) return null;
     return { 
@@ -274,8 +301,19 @@ class DB {
   }
 
   async saveOrder(order: Partial<Order>): Promise<void> {
+    // Prima di salvare l'ordine, ci assicuriamo che esista la giornata in 'days'
+    // Questo è fondamentale per gli ordini ricorrenti automatici
+    const todayDate = new Date().toISOString().split('T')[0];
+    let dayId = order.dayId;
+    
+    if (!dayId) {
+      const { data: dayData, error: dayError } = await supabase.from('days').upsert({ date: todayDate, status: 'OPEN' }, { onConflict: 'date' }).select().single();
+      if (dayError) throw dayError;
+      dayId = dayData.id;
+    }
+
     const payload = { 
-      day_id: order.dayId, 
+      day_id: dayId, 
       user_id: order.userId, 
       pizza_id: order.pizzaId, 
       slot_time: order.slotTime, 

@@ -9,7 +9,8 @@ import AdminPizzas from './views/AdminPizzas';
 import AdminUsers from './views/AdminUsers';
 import AdminHistory from './views/AdminHistory';
 import AdminModifications from './views/AdminModifications';
-import { Fingerprint, X } from './components/Icons';
+import AdminCalendar from './views/AdminCalendar';
+import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
 const App: React.FC = () => {
@@ -18,7 +19,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
-  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar'>('dashboard');
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
@@ -79,6 +80,7 @@ const App: React.FC = () => {
       {view === 'users' && <AdminUsers onBack={() => setView('dashboard')} />}
       {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
       {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
+      {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
       {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
       {view === 'dashboard' && (
         <AdminDashboard 

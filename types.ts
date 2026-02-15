@@ -41,6 +41,20 @@ export enum DayStatus {
   CLOSED = 'CLOSED'
 }
 
+export enum OverrideType {
+  EXTRA = 'EXTRA',
+  DISABLED = 'DISABLED',
+  FORCE_OPEN = 'FORCE_OPEN',
+  FORCE_CLOSED = 'FORCE_CLOSED'
+}
+
+export interface DayOverride {
+  id: string;
+  date: string;
+  type: OverrideType;
+  note?: string;
+}
+
 export interface Day {
   id: string;
   date: string;
@@ -55,8 +69,8 @@ export interface Order {
   userId: string;
   pizzaId: string;
   slotTime: SlotTime;
-  addModificationIds: string[]; // Modificato in array
-  removeModificationIds: string[]; // Modificato in array
+  addModificationIds: string[];
+  removeModificationIds: string[];
   note: string;
   createdAt: string;
   updatedAt: string;
