@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Day, DayStatus, SlotTime, Role, Modification, DayOverride } from '../types';
 import { db, GlobalSettings } from '../services/db';
@@ -170,7 +169,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
 
   if (loading && !error) {
     return (
-      <Layout title="Admin" onLogout={onLogout}>
+      <Layout title="InTavola Admin" onLogout={onLogout}>
         <div className="flex justify-center py-20"><div className="loading-spinner !w-10 !h-10" /></div>
       </Layout>
     );
@@ -178,24 +177,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
 
   return (
     <Layout title="Gestione Locale" onLogout={onLogout}>
-      <div className="fixed top-0 left-1/4 right-1/4 h-14 z-[60]" onClick={handleTitleClick} />
+      {/* Elemento invisibile per reset stagionale, spostato per non interferire con header */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-10 z-[60]" onClick={handleTitleClick} />
 
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-4 py-2 rounded-full text-xs font-bold animate-in fade-in zoom-in duration-300">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-4 py-2 rounded-full text-[10px] font-bold animate-in fade-in zoom-in duration-300">
           {toast}
         </div>
       )}
-
-      {/* Modal Reset PIN e Conferma Finale omessi per brevità, rimangono uguali */}
 
       <div className="space-y-6">
         {/* Card Personale */}
         <Card className="p-4 border-l-4 border-[#FF9500] bg-orange-50/30">
            <div className="flex justify-between items-center">
              <div className="flex items-center gap-3">
-               <div className="p-2 bg-orange-100 text-orange-600 rounded-full"><PizzaIcon size={24} /></div>
+               <div className="p-2 bg-orange-100 text-orange-600 rounded-full"><PizzaIcon size={20} /></div>
                <div>
-                 <p className="text-[10px] font-bold text-[#8E8E93] uppercase">Area Dipendente</p>
+                 <p className="text-[9px] font-bold text-[#8E8E93] uppercase tracking-wider">Area Dipendente</p>
                  <p className="text-sm font-bold">Ordina la tua pizza</p>
                </div>
              </div>
@@ -206,23 +204,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         {/* Status Sistema */}
         {settings && currentAvailability && (
           <Card className={`p-5 border-t-4 ${currentAvailability.isActive ? 'border-green-500' : 'border-red-500'}`}>
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start mb-5">
               <div>
-                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mb-1">Stato Ordini Staff</p>
+                <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest mb-1">Stato Ordini Staff</p>
                 <h2 className="text-xl font-black text-[#1c1c1e]">{formatDate(new Date())}</h2>
-                <div className="flex items-center gap-1.5 mt-1">
+                <div className="flex items-center gap-1.5 mt-1.5">
                   <ClockIcon size={12} className="text-[#007AFF]" />
-                  <p className="text-[11px] font-bold text-[#007AFF] uppercase">Chiusura auto: {settings.cutoff_time}</p>
+                  <p className="text-[10px] font-bold text-[#007AFF] uppercase">Limite ordini: {settings.cutoff_time}</p>
                 </div>
               </div>
-              <div className={`px-3 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-tight ${currentAvailability.colorClass}`}>
+              <div className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-tight ${currentAvailability.colorClass}`}>
                 {currentAvailability.label}
               </div>
             </div>
 
-            <div className="bg-[#F2F2F7] rounded-2xl p-4 mb-6">
+            <div className="bg-[#F2F2F7] rounded-xl p-4 mb-5">
                <div className="flex items-center justify-between">
-                 <p className="text-xs font-bold text-[#8E8E93]">Pizze ordinate finora:</p>
+                 <p className="text-[11px] font-bold text-[#8E8E93] uppercase">Pizze confermate:</p>
                  <p className="text-2xl font-black text-[#1c1c1e]">{orders.length}</p>
                </div>
             </div>
@@ -232,22 +230,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                 onClick={() => handleToggleDay('open')} 
                 variant={currentDay?.status === 'OPEN' ? 'secondary' : 'primary'}
                 disabled={actionLoading}
-                className="!py-4"
+                className="!py-3.5"
               >
-                <Unlock size={18} /> Forzi Apertura
+                <Unlock size={18} /> Forza Apertura
               </Button>
               <Button 
                 onClick={() => handleToggleDay('close')} 
                 variant="danger"
                 disabled={actionLoading}
-                className="!py-4"
+                className="!py-3.5"
               >
-                <Lock size={18} /> Forzi Chiusura
+                <Lock size={18} /> Forza Chiusura
               </Button>
             </div>
-            <p className="text-[9px] text-center text-[#8E8E93] font-bold uppercase mt-4 tracking-tighter">
-              L'azione manuale ha priorità sulla programmazione automatica
-            </p>
           </Card>
         )}
 
@@ -257,21 +252,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
             variant="primary" 
             fullWidth 
             onClick={handleDownloadReport}
-            className="!bg-[#34C759] !py-5 shadow-lg active:scale-95"
+            className="!bg-[#34C759] !py-4 shadow-md active:scale-95"
           >
-            <FileText size={20} /> Scarica Report per Cucina ({orders.length})
+            <FileText size={18} /> Scarica Report Cucina ({orders.length})
           </Button>
         )}
 
         {/* Menu Amministratore */}
         {isAdmin && (
           <div className="space-y-2 pt-4 border-t border-[#C6C6C8]">
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Configurazione</p>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><Calendar size={18} className="text-[#007AFF]" /> Programmazione Calendario</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><PizzaIcon size={18} /> Gestione Menu Pizze</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><Sliders size={18} /> Gestione Variazioni</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><UsersIcon size={18} /> Dipendenti e PIN</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><History size={18} /> Storico e Archivio</Button>
+            <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Configurazione Gestionale</p>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border border-[#C6C6C8]/30"><PizzaIcon size={18} /> Lista Pizze Menu</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Sliders size={18} /> Lista Varianti</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border border-[#C6C6C8]/30"><UsersIcon size={18} /> Lista Dipendenti</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30"><History size={18} /> Archivio Storico</Button>
           </div>
         )}
       </div>

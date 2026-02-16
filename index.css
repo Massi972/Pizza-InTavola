@@ -10,28 +10,33 @@
     --sar: env(safe-area-inset-right);
   }
 
-  /* Reset radicale per iOS */
+  /* Reset per prevenire scroll orizzontali e gestire correttamente l'altezza su iOS */
   html {
     @apply bg-[#F2F2F7];
     overflow-x: hidden;
-    height: -webkit-fill-available;
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply font-sans antialiased text-black bg-[#F2F2F7];
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
-    /* Rimosso position: fixed per permettere il calcolo corretto delle safe areas */
+    width: 100%;
+    /* Utilizzo di dynamic viewport height per Safari */
+    min-height: 100dvh;
     margin: 0;
     padding: 0;
+    /* Rimuove rimbalzi elastici su elementi non necessari */
+    overscroll-behavior-y: none;
   }
 
   #root {
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    overflow-x: hidden;
   }
 }
 
@@ -49,13 +54,20 @@
     @apply border-2 border-[#f3f3f3] border-t-[#007AFF] rounded-full w-4 h-4 animate-spin;
   }
 
-  /* Utility per safe area con fallback di sicurezza */
-  .safe-top-padding {
-    padding-top: max(12px, var(--sat));
+  /* Padding superiore per evitare che il contenuto finisca sotto l'ora/notch */
+  .safe-header-padding {
+    padding-top: max(20px, var(--sat));
   }
   
+  /* Padding inferiore per proteggere il contenuto dalla barra home di iOS */
   .safe-bottom-padding {
-    padding-bottom: max(12px, var(--sab));
+    padding-bottom: max(16px, var(--sab));
+  }
+  
+  /* Margini laterali di sicurezza */
+  .safe-x-padding {
+    padding-left: var(--sal);
+    padding-right: var(--sar);
   }
 }
 
