@@ -1,7 +1,6 @@
-
 {
-  "name": "Staff Pizza InTavola",
-  "short_name": "Staff Pizza",
+  "name": "App Pizza",
+  "short_name": "App Pizza",
   "description": "Ordinazione pizze staff per il locale InTavola",
   "start_url": "/",
   "display": "standalone",
@@ -9,15 +8,15 @@
   "theme_color": "#007AFF",
   "icons": [
     {
-      "src": "https://akifadjnpedvwesxzbsw.supabase.co/storage/v1/object/public/Branding/APP%20PIZZA%20ICONA.jpg",
+      "src": "https://akifadjnpedvwesxzbsw.supabase.co/storage/v1/object/public/Branding/App%20Icon%20Pizza2.png?v=2",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://akifadjnpedvwesxzbsw.supabase.co/storage/v1/object/public/Branding/APP%20PIZZA%20ICONA.jpg",
+      "src": "https://akifadjnpedvwesxzbsw.supabase.co/storage/v1/object/public/Branding/App%20Icon%20Pizza2.png?v=2",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]
