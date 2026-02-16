@@ -21,17 +21,13 @@ export interface GlobalSettings {
   override_cutoff: boolean;
   manager_phone?: string;
   active_days: string[]; 
+  cutoff_time: string; // Nuovo campo dinamico
 }
 
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Dettaglio Errore [${context}]:`, error);
     const msg = error.message || "Errore sconosciuto";
-    
-    if (msg.includes("active_days") || (msg.includes("column") && msg.includes("not found"))) {
-      throw new Error(`SCHEMA_ERROR: La colonna 'active_days' manca nella tabella 'settings'.`);
-    }
-    
     throw new Error(`${context}: ${msg}`);
   }
 
@@ -40,29 +36,23 @@ class DB {
       master_code: 'PIZZA2025', 
       override_cutoff: false, 
       manager_phone: '', 
-      active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'] 
+      active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+      cutoff_time: '16:30' // Default
     };
 
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
       
-      if (error) {
-        if (error.message.includes('active_days')) throw error;
-        return defaults;
-      }
-
-      if (!data) return defaults;
+      if (error || !data) return defaults;
       
       return {
         master_code: data.master_code || defaults.master_code,
         override_cutoff: !!data.override_cutoff,
         manager_phone: data.manager_phone || '',
-        active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days
+        active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days,
+        cutoff_time: data.cutoff_time || defaults.cutoff_time
       };
     } catch (err: any) {
-      if (err.message.includes('active_days')) {
-        await this.handleError(err, "Caricamento impostazioni");
-      }
       return defaults;
     }
   }
@@ -84,8 +74,8 @@ class DB {
     if (error) await this.handleError(error, "Salvataggio eccezione");
   }
 
-  async deleteOverride(id: string): Promise<void> {
-    const { error } = await supabase.from('day_overrides').delete().eq('id', id);
+  async deleteOverride(date: string): Promise<void> {
+    const { error } = await supabase.from('day_overrides').delete().eq('date', date);
     if (error) await this.handleError(error, "Eliminazione eccezione");
   }
 
@@ -291,10 +281,8 @@ class DB {
   }
 
   async resetSeasonalData(): Promise<void> {
-    // Ordine di cancellazione per vincoli di integrità: prima gli ordini, poi le giornate
     const { error: ordersError } = await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     if (ordersError) throw ordersError;
-    
     const { error: daysError } = await supabase.from('days').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     if (daysError) throw daysError;
   }

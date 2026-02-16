@@ -40,7 +40,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   const [toast, setToast] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
 
-  // Stati per Reset Stagionale Nascosto
   const [clickCount, setClickCount] = useState(0);
   const [showResetPin, setShowResetPin] = useState(false);
   const [resetPin, setResetPin] = useState('');
@@ -81,9 +80,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       }
     } catch (err: any) {
       console.error(err);
-      if (err.message?.includes('SCHEMA ERROR') || err.message?.includes('add_modification_ids')) {
-        setSchemaError("CONFIGURAZIONE DATABASE NECESSARIA: Manca la colonna 'add_modification_ids'. Esegui lo script SQL nel pannello di controllo.");
-      } else if (err.message?.includes('relation "settings" does not exist')) {
+      if (err.message?.includes('relation "settings" does not exist')) {
         setError({ message: "Tabella 'settings' mancante.", code: '42P01' });
       }
     } finally {
@@ -97,10 +94,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
 
   const handleTitleClick = () => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    
     const newCount = clickCount + 1;
     setClickCount(newCount);
-
     if (newCount === 7) {
       setShowResetPin(true);
       setClickCount(0);
@@ -226,9 +221,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                 <span className="text-red-600 font-black">• Tutti gli ordini passati</span><br/>
                 <span className="text-red-600 font-black">• Tutte le giornate registrate</span>
               </p>
-              <p className="text-[10px] text-[#8E8E93] font-medium italic pt-2">
-                Dipendenti, Pizze e Variazioni NON saranno toccati.
-              </p>
             </div>
             <div className="space-y-3 pt-4">
               <Button 
@@ -253,21 +245,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       )}
 
       <div className="space-y-6">
-        {schemaError && (
-          <Card className="p-4 bg-red-50 border-2 border-red-200 animate-pulse">
-            <div className="flex items-start gap-3 text-red-700">
-              <AlertCircle className="shrink-0 mt-1" size={20} />
-              <div className="space-y-2">
-                <p className="text-xs font-black uppercase">Errore Critico Database</p>
-                <p className="text-sm font-bold leading-tight">{schemaError}</p>
-                <Button onClick={fetchData} variant="secondary" className="!py-1.5 !text-[10px] !bg-white">
-                  <RefreshCw size={12} /> Riprova
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
-
         <Card className="p-4 border-l-4 border-[#FF9500] bg-orange-50/30">
            <div className="flex justify-between items-center">
              <div className="flex items-center gap-3">
@@ -292,6 +269,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                 <div>
                   <p className="text-xs font-bold text-[#8E8E93] uppercase">Status Ordini Staff</p>
                   <h2 className="text-lg font-bold">{formatDate(new Date())}</h2>
+                  <p className="text-[10px] text-[#007AFF] font-black uppercase">Chiusura auto: {settings.cutoff_time}</p>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-xs font-bold ${
                   currentDay?.status === DayStatus.OPEN ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -319,9 +297,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
                   </Button>
                 )}
               </div>
-              <p className="text-[9px] text-[#8E8E93] mt-3 text-center uppercase font-bold tracking-wider">
-                Azioni rapide per {isSupervisor ? 'Supervisore' : 'Admin'}
-              </p>
             </Card>
 
             <Card className="p-6 flex flex-col justify-center items-center text-center">
@@ -345,18 +320,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         {isAdmin && (
           <div className="space-y-2 pt-4 border-t border-[#C6C6C8]">
             <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Amministrazione</p>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><Calendar size={18} className="text-[#007AFF]" /> Programmazione Calendario</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border-2 border-[#F2F2F7]"><Calendar size={18} className="text-[#007AFF]" /> Calendario e Orari</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start"><PizzaIcon size={18} /> Menu Pizze</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start"><Sliders size={18} /> Variazioni</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start"><UsersIcon size={18} /> Gestione PIN e Dipendenti</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start"><History size={18} /> Storico Giornate</Button>
           </div>
-        )}
-        
-        {!isAdmin && (
-          <p className="text-center text-[10px] text-[#8E8E93] font-bold uppercase py-6">
-            Accesso limitato al ruolo Supervisore
-          </p>
         )}
       </div>
     </Layout>

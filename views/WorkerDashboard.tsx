@@ -67,7 +67,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         today, 
         settings?.active_days || [], 
         overrides, 
-        currentDay
+        currentDay,
+        settings?.cutoff_time || '16:30'
     );
   }, [settings, overrides, currentDay]);
 
@@ -154,7 +155,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
     return (
       <div className="space-y-6">
-        {/* Messaggio di Saluto Personalizzato */}
         <div className="pt-6 pb-2">
           <h1 className="text-[34px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">
             Ciao! {user.firstName}
@@ -169,14 +169,14 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             <div className="p-3 bg-white/20 rounded-full shrink-0">
                 <Lock size={28} />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-black text-lg tracking-tight">Servizio non attivo</p>
               <p className="text-sm font-medium opacity-90 leading-tight">
-                {availability.label === 'CHIUSO (OLTRE 16:30)' 
-                    ? "Gli ordini per oggi sono chiusi. Il limite era alle 16:30."
-                    : availability.label === 'CHIUSO (CALENDARIO)'
-                    ? "Oggi non è un giorno previsto per le pizze staff."
-                    : "Il servizio è attualmente sospeso."
+                {availability.label.includes('OLTRE') 
+                    ? `Gli ordini per oggi sono chiusi. L'orario limite era alle ${settings?.cutoff_time}.`
+                    : availability.label.includes('FORZATO')
+                    ? "Oggi il locale ha forzato la chiusura degli ordini staff."
+                    : "Oggi non è un giorno previsto per le pizze staff."
                 }
               </p>
             </div>
@@ -258,12 +258,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </Card>
               ))}
             </div>
-            {filteredPizzas.length === 0 && (
-              <div className="text-center py-20 text-[#8E8E93]">
-                <PizzaIcon size={48} className="mx-auto mb-4 opacity-20" />
-                <p className="font-bold">Nessuna pizza trovata</p>
-              </div>
-            )}
           </div>
         )}
       </div>

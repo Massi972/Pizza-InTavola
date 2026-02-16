@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, GlobalSettings } from '../services/db';
-import { DayOverride, Day } from '../types';
+import { DayOverride, Day, OverrideType } from '../types';
 import { Layout } from '../components/Layout';
-import { Card, Button } from '../components/UI';
-import { Check, ClockIcon, Calendar, AlertCircle, RotateCcw, Copy, X } from '../components/Icons';
+import { Card, Button, Input } from '../components/UI';
+import { Check, ClockIcon, Calendar, AlertCircle, RotateCcw, Copy, X, Plus, Trash2 } from '../components/Icons';
 import { formatDate, getDayAvailability } from '../services/utils';
 
 const WEEKDAYS = [
@@ -39,11 +39,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setCurrentDay(d);
       setError(null);
     } catch (err: any) {
-      if (err.message.includes("SCHEMA_ERROR")) {
-        setError("DATABASE INCOMPLETO: La colonna 'active_days' non esiste.");
-      } else {
-        setError("Errore caricamento: " + err.message);
-      }
+      setError("Errore caricamento: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -53,45 +49,70 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     loadData();
   }, []);
 
+  const handleCutoffChange = async (newTime: string) => {
+    if (!settings) return;
+    const oldTime = settings.cutoff_time;
+    setSettings({ ...settings, cutoff_time: newTime });
+    try {
+      await db.updateSettings({ cutoff_time: newTime });
+    } catch (err) {
+      setSettings({ ...settings, cutoff_time: oldTime });
+      alert("Errore salvataggio orario");
+    }
+  };
+
+  const toggleDayOverride = async (dateStr: string, currentInfo: any) => {
+    // Ciclo: Default -> Force Open -> Force Closed -> Default
+    let newType: OverrideType | 'DELETE';
+    
+    if (!currentInfo.isForced) {
+      newType = OverrideType.FORCE_OPEN;
+    } else if (currentInfo.label.includes('APERTO')) {
+      newType = OverrideType.FORCE_CLOSED;
+    } else {
+      newType = 'DELETE';
+    }
+
+    try {
+      if (newType === 'DELETE') {
+        await db.deleteOverride(dateStr);
+      } else {
+        await db.saveOverride({
+          date: dateStr,
+          type: newType,
+          note: 'Override manuale'
+        });
+      }
+      loadData(); // Ricarica per aggiornare l'anteprima
+    } catch (err) {
+      alert("Errore modifica eccezione");
+    }
+  };
+
   const toggleDay = async (dayId: string) => {
     if (!settings) return;
     setSavingId(dayId);
-    setError(null);
     
     const currentActive = settings.active_days || [];
     const newActive = currentActive.includes(dayId)
       ? currentActive.filter(d => d !== dayId)
       : [...currentActive, dayId];
 
-    const oldSettings = { ...settings };
-    setSettings({ ...settings, active_days: newActive });
-
     try {
       await db.updateSettings({ active_days: newActive });
+      setSettings({ ...settings, active_days: newActive });
     } catch (err: any) {
-      if (err.message.includes("SCHEMA_ERROR") || err.message.includes("active_days")) {
-        setError("ERRORE DATABASE: Devi aggiungere la colonna 'active_days' su Supabase.");
-      } else {
-        setError(err.message || "Errore nel salvataggio.");
-      }
-      setSettings(oldSettings);
+      alert("Errore nel salvataggio del loop.");
     } finally {
       setSavingId(null);
     }
   };
 
-  const sqlCommand = "ALTER TABLE settings ADD COLUMN IF NOT EXISTS active_days text[] DEFAULT '{MON, TUE, WED, THU, FRI}';";
-
-  const copySql = () => {
-    navigator.clipboard.writeText(sqlCommand);
-    alert("Comando copiato! Incollalo nell'SQL Editor di Supabase.");
-  };
-
   const getNextTwoWeeks = () => {
     const days = [];
     const now = new Date();
-    // Use settings.active_days or a default fallback to show the loop preview even if DB fails
-    const activeDays = settings?.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+    const activeDays = settings?.active_days || [];
+    const cutoff = settings?.cutoff_time || '16:30';
     
     for (let i = 0; i < 14; i++) {
       const d = new Date(now);
@@ -99,64 +120,47 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const dateStr = d.toLocaleDateString('en-CA');
       days.push({
         dateStr,
-        info: getDayAvailability(dateStr, activeDays, overrides, i === 0 ? currentDay : null)
+        info: getDayAvailability(dateStr, activeDays, overrides, i === 0 ? currentDay : null, cutoff)
       });
     }
     return days;
   };
 
   return (
-    <Layout title="Loop Settimanale" onBack={onBack}>
+    <Layout title="Calendario e Orari" onBack={onBack}>
       <div className="space-y-6">
         
-        {error && (
-          <div className="p-4 bg-red-50 rounded-2xl border border-red-200 space-y-3 animate-in fade-in zoom-in duration-300">
-            <div className="flex items-start gap-3 text-red-600">
-              <AlertCircle size={20} className="shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-xs font-black uppercase">Errore di Configurazione</p>
-                <p className="text-[11px] font-bold leading-tight">{error}</p>
-              </div>
-            </div>
-            <Button size="sm" variant="danger" fullWidth onClick={() => setShowSqlHelp(true)} className="!text-[10px] !py-2">
-              Vedi come risolvere (SQL)
-            </Button>
-          </div>
-        )}
-
-        {showSqlHelp && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <Card className="w-full max-w-sm p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-black text-sm uppercase">Riparazione Database</h3>
-                <button onClick={() => setShowSqlHelp(false)}><X size={20} /></button>
-              </div>
-              <p className="text-xs text-[#8E8E93] leading-relaxed">
-                Il tuo database non ha lo spazio per salvare i giorni del loop. Esegui questo comando nell'<b>SQL Editor</b> di Supabase:
-              </p>
-              <div className="bg-[#F2F2F7] p-3 rounded-xl font-mono text-[10px] break-all border border-[#C6C6C8] select-all">
-                {sqlCommand}
-              </div>
-              <Button fullWidth onClick={copySql}>
-                <Copy size={16} /> Copia Comando SQL
-              </Button>
-            </Card>
-          </div>
-        )}
-
+        {/* Sezione Orario Limite */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
-            <ClockIcon size={18} className="text-[#007AFF]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Configura la Settimana</p>
+            <ClockIcon size={18} className="text-[#FF9500]" />
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Orario Massimo Ordini</p>
+          </div>
+          <Card className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold">Chiusura automatica</p>
+              <p className="text-xs text-[#8E8E93]">Ora limite per ordinare oggi</p>
+            </div>
+            <input 
+              type="time" 
+              className="bg-[#F2F2F7] border-none rounded-xl px-4 py-2 font-black text-lg text-[#007AFF] outline-none"
+              value={settings?.cutoff_time || '16:30'}
+              onChange={(e) => handleCutoffChange(e.target.value)}
+            />
+          </Card>
+        </section>
+
+        {/* Sezione Loop Settimanale */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Calendar size={18} className="text-[#007AFF]" />
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Aperture Ricorrenti (Loop)</p>
           </div>
           
           <Card className="p-4">
-            <p className="text-[11px] text-[#8E8E93] mb-4 font-medium leading-relaxed">
-              Attiva i giorni ricorrenti. Nota: se vedi l'errore sopra, le modifiche non verranno salvate finché non aggiorni il database.
-            </p>
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
-                const isActive = (settings?.active_days || ['MON', 'TUE', 'WED', 'THU', 'FRI']).includes(day.id);
+                const isActive = (settings?.active_days || []).includes(day.id);
                 const isSaving = savingId === day.id;
                 
                 return (
@@ -180,23 +184,39 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </Card>
         </section>
 
+        {/* Anteprima e Eccezioni */}
         <section className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Calendar size={18} className="text-[#34C759]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima (Loop Attivo)</p>
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Plus size={18} className="text-[#34C759]" />
+              <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima e Eccezioni</p>
+            </div>
           </div>
+          <p className="text-[10px] text-[#8E8E93] italic px-1">Clicca su un giorno per forzare l'apertura o la chiusura.</p>
 
           <div className="space-y-2">
             {getNextTwoWeeks().map(({ dateStr, info }) => (
-              <Card key={dateStr} className={`p-3 flex justify-between items-center border-l-4 ${
-                info.isActive ? 'border-green-500' : 'border-gray-200 opacity-60'
-              }`}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-[#1c1c1e]">{formatDate(dateStr)}</span>
-                    {info.isToday && <span className="text-[8px] bg-[#007AFF] text-white px-1.5 py-0.5 rounded-full font-bold">OGGI</span>}
+              <Card 
+                key={dateStr} 
+                onClick={() => toggleDayOverride(dateStr, info)}
+                className={`p-3 flex justify-between items-center border-l-4 cursor-pointer active:scale-[0.98] transition-all ${
+                  info.isActive ? 'border-green-500' : 'border-gray-200'
+                } ${info.isForced ? 'bg-blue-50/30' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="text-center min-w-[40px]">
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase">{info.dayName}</p>
+                    <p className="text-sm font-black">{dateStr.split('-')[2]}</p>
                   </div>
-                  <p className="text-[9px] font-bold text-[#8E8E93] uppercase mt-0.5">{info.dayName}</p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#1c1c1e]">{formatDate(dateStr)}</span>
+                      {info.isToday && <span className="text-[8px] bg-[#007AFF] text-white px-1.5 py-0.5 rounded-full font-bold">OGGI</span>}
+                    </div>
+                    {info.isForced && (
+                      <span className="text-[8px] font-black text-[#007AFF] uppercase tracking-tighter">Eccezione Manuale</span>
+                    )}
+                  </div>
                 </div>
                 <div className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-tight ${info.colorClass}`}>
                   {info.label}
@@ -208,9 +228,9 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
         <button 
           onClick={loadData}
-          className="w-full py-4 flex items-center justify-center gap-2 text-[#007AFF] text-xs font-bold uppercase tracking-widest"
+          className="w-full py-4 flex items-center justify-center gap-2 text-[#8E8E93] text-xs font-bold uppercase tracking-widest"
         >
-          <RotateCcw size={14} /> Ricarica Dati
+          <RotateCcw size={14} /> Aggiorna Anteprima
         </button>
       </div>
     </Layout>
