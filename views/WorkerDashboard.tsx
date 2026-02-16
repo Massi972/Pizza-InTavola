@@ -153,14 +153,14 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     const showClosedMessage = !canOrder;
 
     return (
-      <div className="space-y-8">
-        {/* Intestazione Saluto */}
-        <div className="pt-2">
-          <h1 className="text-3xl font-black text-[#1c1c1e] leading-tight">
-            Ciao {user.firstName}! 👋
+      <div className="space-y-6">
+        {/* Messaggio di Saluto Personalizzato */}
+        <div className="pt-6 pb-2">
+          <h1 className="text-[34px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">
+            Ciao! {user.firstName}
           </h1>
-          <p className="text-lg font-bold text-[#8E8E93] mt-1">
-            Che pizza mangi oggi?
+          <p className="text-xl font-bold text-[#8E8E93] mt-1">
+            che pizza mangi oggi?
           </p>
         </div>
 
@@ -223,12 +223,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         )}
 
         {(!myOrder || isEditing) && !selectedPizza && (
-          <div className={`${!canOrder ? 'opacity-40 pointer-events-none' : ''}`}>
-            <div className="max-w-2xl mx-auto mb-8">
+          <div className={`space-y-6 ${!canOrder ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className="max-w-2xl mx-auto">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E8E93]" size={20} />
                 <Input 
-                  placeholder="Cerca tra le pizze disponibili..." 
+                  placeholder="Cerca pizza o ingredienti..." 
                   className="pl-12 !py-4 !rounded-2xl border-none shadow-md focus:shadow-lg transition-shadow bg-white"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -236,11 +236,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPizzas.map(pizza => (
                 <Card 
                   key={pizza.id} 
-                  className="p-5 cursor-pointer hover:shadow-xl hover:-translate-y-1 active:scale-95 transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/20"
+                  className="p-5 cursor-pointer hover:shadow-xl active:scale-95 transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/20"
                   onClick={() => canOrder && setSelectedPizza(pizza)}
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -253,7 +253,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                     {pizza.ingredients?.join(', ')}
                   </p>
                   <div className="mt-4 pt-4 border-t border-[#F2F2F7] flex justify-end">
-                    <span className="text-[#007AFF] text-xs font-black uppercase tracking-widest">Seleziona</span>
+                    <span className="text-[#007AFF] text-xs font-black uppercase tracking-widest">Scegli</span>
                   </div>
                 </Card>
               ))}
@@ -261,7 +261,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             {filteredPizzas.length === 0 && (
               <div className="text-center py-20 text-[#8E8E93]">
                 <PizzaIcon size={48} className="mx-auto mb-4 opacity-20" />
-                <p className="font-bold">Nessuna pizza trovata con questi criteri</p>
+                <p className="font-bold">Nessuna pizza trovata</p>
               </div>
             )}
           </div>
@@ -274,7 +274,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
   return (
     <Layout 
-      title={activeTab === 'menu' ? 'Dashboard Ordini' : 'Il mio Profilo'}
+      title={activeTab === 'menu' ? 'Dashboard' : 'Il mio Profilo'}
       onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}
     >
       {showSuccess && (
@@ -386,7 +386,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'settings' ? 'text-[#007AFF] scale-110 font-bold' : 'text-[#8E8E93] opacity-60 hover:opacity-100'}`}
           >
             <Settings size={26} />
-            <span className="text-[11px] font-black uppercase tracking-tighter">Io</span>
+            <span className="text-[11px] font-black uppercase tracking-tighter">Profilo</span>
           </button>
         </div>
       </nav>
@@ -421,6 +421,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 <section className="space-y-3">
                   <p className="text-[11px] font-black text-[#8E8E93] uppercase tracking-[0.2em] pl-1">Aggiunte (+)</p>
                   <div className="bg-white rounded-[24px] shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                    {addOptions.length === 0 && <p className="p-4 text-xs text-center text-gray-400 italic">Nessuna aggiunta disponibile</p>}
                     {addOptions.map(opt => (
                       <button 
                         key={opt.id} 
@@ -441,6 +442,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 <section className="space-y-3">
                   <p className="text-[11px] font-black text-[#8E8E93] uppercase tracking-[0.2em] pl-1">Rimozioni (-)</p>
                   <div className="bg-white rounded-[24px] shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                    {removeOptions.length === 0 && <p className="p-4 text-xs text-center text-gray-400 italic">Nessuna rimozione disponibile</p>}
                     {removeOptions.map(opt => (
                       <button 
                         key={opt.id} 
