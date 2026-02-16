@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LogOut, ChevronLeft } from './Icons';
 import { Role } from '../types';
@@ -13,8 +12,8 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBack }) => {
   return (
-    <div className="min-h-screen flex flex-col max-w-lg mx-auto bg-[#F2F2F7]">
-      <header className="sticky top-0 z-40 ios-blur border-b border-[#C6C6C8] px-4 py-3 flex items-center justify-between">
+    <div className="min-h-[100dvh] flex flex-col max-w-lg mx-auto bg-[#F2F2F7] overflow-x-hidden">
+      <header className="sticky top-0 z-40 ios-blur border-b border-[#C6C6C8] px-4 py-3 flex items-center justify-between safe-top">
         <div className="flex items-center gap-2">
           {onBack && (
             <button onClick={onBack} className="p-1 -ml-1 text-[#007AFF]">
@@ -32,7 +31,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBac
           </button>
         )}
       </header>
-      <main className="flex-1 p-4 pb-24">
+      <main className="flex-1 p-4 pb-[calc(100px+env(safe-area-inset-bottom))]">
         {children}
       </main>
     </div>

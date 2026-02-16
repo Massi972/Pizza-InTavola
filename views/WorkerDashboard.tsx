@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Pizza, Order, SlotTime, DayStatus, Modification, Role, DayOverride } from '../types';
 import { db, GlobalSettings } from '../services/db';
@@ -155,7 +154,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
     return (
       <div className="space-y-6">
-        <div className="pt-6 pb-2">
+        <div className="pt-2 pb-2">
           <h1 className="text-[34px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">
             Ciao! {user.firstName}
           </h1>
@@ -358,7 +357,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 ios-blur border-t border-[#C6C6C8] py-3 pb-8 md:pb-6 flex justify-center z-40">
+      {/* Navigazione fissata al fondo rispettando la Safe Area di iPhone */}
+      <nav className="fixed bottom-0 left-0 right-0 ios-blur border-t border-[#C6C6C8] pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex justify-center z-40">
         <div className="w-full max-w-2xl px-12 flex justify-between items-center">
           <button 
             onClick={() => setActiveTab('menu')} 
@@ -385,12 +385,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         </div>
       </nav>
 
-      {/* Pannello Selezione Pizza - Responsive */}
+      {/* Pannello Selezione Pizza - Responsive con supporto Safe Area */}
       {selectedPizza && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end items-center">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end items-center overflow-hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !submitting && setSelectedPizza(null)} />
-          <div className="relative bg-[#F2F2F7] w-full max-w-4xl rounded-t-[40px] p-6 pb-12 space-y-8 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[92vh]">
-            <div className="w-16 h-1.5 bg-[#C6C6C8] rounded-full mx-auto" />
+          <div className="relative bg-[#F2F2F7] w-full max-w-4xl rounded-t-[40px] p-6 space-y-6 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[95dvh] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+            <div className="w-16 h-1.5 bg-[#C6C6C8] rounded-full mx-auto shrink-0" />
             
             <div className="text-center">
               <h2 className="text-3xl font-black text-[#1c1c1e]">{selectedPizza.name}</h2>
@@ -465,11 +465,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         </div>
       )}
 
-      {/* Recap Overlay - Responsive Width */}
+      {/* Recap Overlay */}
       {showRecap && selectedPizza && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 animate-in fade-in duration-300 overflow-hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => !submitting && setShowRecap(false)} />
-          <Card className="relative w-full max-w-lg p-8 space-y-6 shadow-2xl bg-white rounded-[32px]">
+          <Card className="relative w-full max-w-lg p-8 space-y-6 shadow-2xl bg-white rounded-[32px] max-h-[90dvh] overflow-y-auto">
             <div className="text-center space-y-2">
               <h3 className="text-3xl font-black text-[#1c1c1e] tracking-tight">Riepilogo</h3>
               <p className="text-xs text-[#8E8E93] font-bold uppercase tracking-[0.2em]">Conferma la tua scelta finale</p>
