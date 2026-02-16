@@ -1,7 +1,17 @@
+import { db } from './db';
 
-/**
- * Servizio per la gestione reale della biometria tramite WebAuthn
- */
+const base64ToArrayBuffer = (base64: string) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+};
 
 export const isBiometricAvailable = async (): Promise<boolean> => {
   return !!(
@@ -10,57 +20,79 @@ export const isBiometricAvailable = async (): Promise<boolean> => {
   );
 };
 
-export const registerBiometrics = async (userId: string, userName: string): Promise<boolean> => {
+export const registerPasskey = async (userId: string): Promise<boolean> => {
   try {
-    const challenge = new Uint8Array(32);
-    window.crypto.getRandomValues(challenge);
-
-    const userID = new TextEncoder().encode(userId);
-
+    const options = await db.getWebAuthnRegisterOptions(userId);
+    
+    // Preparazione opzioni per l'API del browser
+    // Fix: Explicitly cast string literals to WebAuthn specific types to satisfy TypeScript strict literal checks
     const publicKey: PublicKeyCredentialCreationOptions = {
-      challenge,
-      rp: { name: "Pizza InTavola", id: window.location.hostname },
+      ...options,
+      attestation: options.attestation as AttestationConveyancePreference,
+      authenticatorSelection: options.authenticatorSelection as AuthenticatorSelectionCriteria,
+      challenge: base64ToArrayBuffer(options.challenge),
       user: {
-        id: userID,
-        name: userName,
-        displayName: userName,
-      },
-      pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        userVerification: "required",
-      },
-      timeout: 60000,
+        ...options.user,
+        id: base64ToArrayBuffer(options.user.id),
+      }
     };
 
-    const credential = await navigator.credentials.create({ publicKey });
+    const credential = (await navigator.credentials.create({ publicKey })) as any;
     if (credential) {
-      localStorage.setItem(`biometric_id_${userId}`, (credential as any).id);
+      await db.verifyWebAuthnRegister(userId, {
+        id: credential.id,
+        rawId: arrayBufferToBase64(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: arrayBufferToBase64(credential.response.attestationObject),
+          clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+          transports: credential.response.getTransports ? credential.response.getTransports() : undefined
+        }
+      });
+      localStorage.setItem('pizzastaff_passkey_active', 'true');
       return true;
     }
     return false;
   } catch (err) {
-    console.error("Errore registrazione biometria:", err);
+    console.error("Errore registrazione passkey:", err);
     return false;
   }
 };
 
-export const verifyBiometrics = async (userId: string): Promise<boolean> => {
+export const authenticatePasskey = async (): Promise<any> => {
   try {
-    const challenge = new Uint8Array(32);
-    window.crypto.getRandomValues(challenge);
-
+    const options = await db.getWebAuthnLoginOptions();
+    
+    // Fix: cast userVerification to UserVerificationRequirement to match browser expectations
     const publicKey: PublicKeyCredentialRequestOptions = {
-      challenge,
-      timeout: 60000,
-      userVerification: "required",
-      allowCredentials: [], // Vuoto permette l'uso di qualsiasi credenziale registrata sulla piattaforma
+      ...options,
+      userVerification: options.userVerification as UserVerificationRequirement,
+      challenge: base64ToArrayBuffer(options.challenge),
     };
 
-    const assertion = await navigator.credentials.get({ publicKey });
-    return !!assertion;
+    const assertion = (await navigator.credentials.get({ publicKey })) as any;
+    if (assertion) {
+      const result = await db.verifyWebAuthnLogin({
+        id: assertion.id,
+        rawId: arrayBufferToBase64(assertion.rawId),
+        type: assertion.type,
+        response: {
+          authenticatorData: arrayBufferToBase64(assertion.response.authenticatorData),
+          clientDataJSON: arrayBufferToBase64(assertion.response.clientDataJSON),
+          signature: arrayBufferToBase64(assertion.response.signature),
+          userHandle: assertion.response.userHandle ? arrayBufferToBase64(assertion.response.userHandle) : null
+        }
+      });
+      return result.user;
+    }
+    return null;
   } catch (err) {
-    console.error("Errore verifica biometria:", err);
-    return false;
+    console.error("Errore autenticazione passkey:", err);
+    return null;
   }
+};
+
+export const revokePasskeys = async (userId: string) => {
+  await db.revokePasskeys(userId);
+  localStorage.removeItem('pizzastaff_passkey_active');
 };

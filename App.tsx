@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthState, User, Role } from './types';
 import { db } from './services/db';
 import LoginView from './views/Login';
@@ -13,6 +12,8 @@ import AdminCalendar from './views/AdminCalendar';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
+const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; // Logout immediato al cambio visibilità
+
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
     const saved = localStorage.getItem('pizzastaff_auth');
@@ -20,11 +21,47 @@ const App: React.FC = () => {
   });
 
   const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar'>('dashboard');
-  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
+  const handleLogout = useCallback(() => {
+    setAuth({ user: null, isAuthenticated: false });
+    localStorage.removeItem('pizzastaff_auth');
+    setView('dashboard');
+  }, []);
+
+  // --- SESSION GUARD: Logout on Background ---
   useEffect(() => {
-    localStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
+      } else {
+        const lastBg = localStorage.getItem('pizzastaff_last_background_at');
+        if (lastBg) {
+          const elapsed = Date.now() - parseInt(lastBg);
+          if (elapsed >= BACKGROUND_LOGOUT_THRESHOLD_MS && auth.isAuthenticated) {
+            handleLogout();
+            // Opzionale: Mostra un toast di sistema o log
+            console.log("Sessione invalidata per inattività in background.");
+          }
+          localStorage.removeItem('pizzastaff_last_background_at');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleLogout); // Extra safety per chiusura tab
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleLogout);
+    };
+  }, [auth.isAuthenticated, handleLogout]);
+
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      localStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
+    }
     
     const checkSupport = async () => {
       const supported = !!(window.PublicKeyCredential && 
@@ -37,80 +74,65 @@ const App: React.FC = () => {
   const handleLogin = (user: User) => {
     setAuth({ user, isAuthenticated: true });
     
-    const biometricEnabled = localStorage.getItem('pizzastaff_biometric_enabled') === 'true';
-    const hasDeclined = localStorage.getItem('pizzastaff_biometric_declined') === 'true';
+    const passkeyActive = localStorage.getItem('pizzastaff_passkey_active') === 'true';
+    const hasDeclined = localStorage.getItem('pizzastaff_passkey_declined') === 'true';
 
-    if (!biometricEnabled && !hasDeclined && window.PublicKeyCredential) {
-      setTimeout(() => setShowBiometricPrompt(true), 1500);
+    if (!passkeyActive && !hasDeclined && isBiometricSupported) {
+      setTimeout(() => setShowPasskeyPrompt(true), 1500);
     }
   };
 
-  const handleLogout = () => {
-    setAuth({ user: null, isAuthenticated: false });
-    setView('dashboard');
-  };
-
-  const enableBiometrics = () => {
-    if (auth.user?.pin) {
-      localStorage.setItem('pizzastaff_stored_pin', auth.user.pin);
-      localStorage.setItem('pizzastaff_biometric_enabled', 'true');
-      localStorage.removeItem('pizzastaff_biometric_declined');
-      setShowBiometricPrompt(false);
-    }
-  };
-
-  const declineBiometrics = () => {
-    localStorage.setItem('pizzastaff_biometric_declined', 'true');
-    setShowBiometricPrompt(false);
+  const declinePasskey = () => {
+    localStorage.setItem('pizzastaff_passkey_declined', 'true');
+    setShowPasskeyPrompt(false);
   };
 
   if (!auth.isAuthenticated || !auth.user) {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  // Se l'utente è un semplice Worker, vede solo la dashboard ordini
-  if (auth.user.role === Role.WORKER) {
-    return <WorkerDashboard user={auth.user} onLogout={handleLogout} />;
-  }
-
-  // Se l'utente è ADMIN o SUPERVISOR
   return (
-    <div className="bg-[#F2F2F7] min-h-screen">
-      {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
-      {view === 'users' && <AdminUsers currentUser={auth.user} onBack={() => setView('dashboard')} />}
-      {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
-      {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
-      {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
-      {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
-      {view === 'dashboard' && (
-        <AdminDashboard 
-          user={auth.user} 
-          onLogout={handleLogout} 
-          onNavigate={(v: any) => setView(v)} 
-          onGoToOrder={() => setView('order')}
-        />
-      )}
+    <div className="bg-[#F2F2F7] h-full overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto">
+        {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
+        {view === 'users' && <AdminUsers currentUser={auth.user} onBack={() => setView('dashboard')} />}
+        {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
+        {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
+        {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
+        {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
+        {view === 'dashboard' && auth.user.role !== Role.WORKER && (
+          <AdminDashboard 
+            user={auth.user} 
+            onLogout={handleLogout} 
+            onNavigate={(v: any) => setView(v)} 
+            onGoToOrder={() => setView('order')}
+          />
+        )}
+        {auth.user.role === Role.WORKER && (
+          <WorkerDashboard user={auth.user} onLogout={handleLogout} />
+        )}
+      </div>
 
-      {showBiometricPrompt && isBiometricSupported && (
+      {showPasskeyPrompt && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={declineBiometrics} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={declinePasskey} />
           <div className="relative bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in slide-in-from-bottom duration-500 text-center space-y-6">
             <div className="w-20 h-20 bg-[#F2F2F7] text-[#007AFF] rounded-full flex items-center justify-center mx-auto">
               <Fingerprint size={40} />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-[#1c1c1e]">Accesso Rapido</h3>
+              <h3 className="text-xl font-bold text-[#1c1c1e]">Accesso Biometrico</h3>
               <p className="text-sm text-[#8E8E93] mt-2 leading-relaxed">
-                Vuoi attivare il Face ID o l'impronta digitale per accedere più velocemente la prossima volta?
+                Vuoi attivare il Face ID o l'impronta digitale? Potrai entrare istantaneamente senza PIN la prossima volta.
               </p>
             </div>
             <div className="space-y-3">
-              <Button fullWidth onClick={enableBiometrics}>Attiva Ora</Button>
+              <Button fullWidth onClick={() => { setShowPasskeyPrompt(false); setView('order'); }}>Configura nel profilo</Button>
               <button 
-                onClick={declineBiometrics}
+                onClick={declinePasskey}
                 className="w-full py-2 text-sm font-bold text-[#8E8E93] uppercase tracking-widest"
               >
-                Magari più tardi
+                No, grazie
               </button>
             </div>
           </div>

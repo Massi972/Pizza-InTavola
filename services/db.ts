@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
 
@@ -21,7 +20,17 @@ export interface GlobalSettings {
   override_cutoff: boolean;
   manager_phone?: string;
   active_days: string[]; 
-  cutoff_time: string; // Nuovo campo dinamico
+  cutoff_time: string;
+}
+
+export interface Passkey {
+  id: string;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  counter: number;
+  transports: string[];
+  created_at: string;
 }
 
 class DB {
@@ -31,20 +40,110 @@ class DB {
     throw new Error(`${context}: ${msg}`);
   }
 
+  // --- WEBAUTHN SIMULATED ENDPOINTS ---
+
+  async getWebAuthnRegisterOptions(userId: string) {
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!user) throw new Error("Utente non trovato");
+
+    // In un sistema reale, la challenge verrebbe salvata in sessione server-side
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const challengeBase64 = btoa(String.fromCharCode(...challenge));
+    localStorage.setItem('webauthn_challenge', challengeBase64);
+
+    return {
+      challenge: challengeBase64,
+      rp: { name: "Pizza InTavola", id: window.location.hostname },
+      user: {
+        id: btoa(user.id),
+        name: user.first_name + ' ' + user.last_name,
+        displayName: user.first_name,
+      },
+      pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+      timeout: 60000,
+      attestation: "none",
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        userVerification: "required",
+        residentKey: "preferred",
+      }
+    };
+  }
+
+  async verifyWebAuthnRegister(userId: string, credential: any) {
+    // Simulazione verifica lato server dell'attestazione
+    const { error } = await supabase.from('passkeys').insert({
+      user_id: userId,
+      credential_id: credential.id,
+      public_key: "MOCKED_PUBLIC_KEY", // In produzione: estrarre da credential.response.attestationObject
+      counter: 0,
+      transports: credential.response.transports || ['internal']
+    });
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  async getWebAuthnLoginOptions() {
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const challengeBase64 = btoa(String.fromCharCode(...challenge));
+    localStorage.setItem('webauthn_challenge', challengeBase64);
+
+    return {
+      challenge: challengeBase64,
+      timeout: 60000,
+      userVerification: "required",
+      rpId: window.location.hostname,
+    };
+  }
+
+  async verifyWebAuthnLogin(credential: any) {
+    const { data: passkey, error } = await supabase
+      .from('passkeys')
+      .select('*, users(*)')
+      .eq('credential_id', credential.id)
+      .single();
+
+    if (error || !passkey) throw new Error("Credenziale non riconosciuta");
+
+    // Simulazione verifica firma (assertion)
+    return { 
+      success: true, 
+      user: {
+        id: passkey.users.id,
+        firstName: passkey.users.first_name,
+        lastName: passkey.users.last_name,
+        phone_e164: passkey.users.phone_e164,
+        pin: passkey.users.pin,
+        role: passkey.users.role,
+        active: passkey.users.active
+      } 
+    };
+  }
+
+  async revokePasskeys(userId: string) {
+    const { error } = await supabase.from('passkeys').delete().eq('user_id', userId);
+    if (error) throw error;
+  }
+
+  async hasPasskeys(userId: string): Promise<boolean> {
+    const { count } = await supabase.from('passkeys').select('*', { count: 'exact', head: true }).eq('user_id', userId);
+    return (count || 0) > 0;
+  }
+
+  // --- STANDARD DB METHODS ---
+
   async getSettings(): Promise<GlobalSettings> {
     const defaults: GlobalSettings = { 
       master_code: 'PIZZA2025', 
       override_cutoff: false, 
       manager_phone: '', 
       active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
-      cutoff_time: '16:30' // Default
+      cutoff_time: '16:30'
     };
-
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      
       if (error || !data) return defaults;
-      
       return {
         master_code: data.master_code || defaults.master_code,
         override_cutoff: !!data.override_cutoff,
@@ -58,8 +157,7 @@ class DB {
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
-    const payload = JSON.parse(JSON.stringify(settings));
-    const { error } = await supabase.from('settings').upsert({ id: 'global', ...payload }, { onConflict: 'id' });
+    const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
     if (error) await this.handleError(error, "Salvataggio impostazioni");
   }
 
@@ -208,16 +306,10 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*').eq('day_id', dayId);
     if (error) return [];
     return (data || []).map(o => ({ 
-      id: o.id, 
-      dayId: o.day_id, 
-      userId: o.user_id, 
-      pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime,
+      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
-      note: o.note || '', 
-      createdAt: o.created_at, 
-      updatedAt: o.updated_at 
+      note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
     }));
   }
 
@@ -225,16 +317,10 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (error) return [];
     return (data || []).map(o => ({ 
-      id: o.id, 
-      dayId: o.day_id, 
-      userId: o.user_id, 
-      pizzaId: o.pizza_id, 
-      slotTime: o.slot_time as SlotTime,
+      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
-      note: o.note || '', 
-      createdAt: o.created_at, 
-      updatedAt: o.updated_at 
+      note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
     }));
   }
 
@@ -243,48 +329,33 @@ class DB {
     const { data, error } = await supabase.from('orders').select('*, days!inner(date)').eq('user_id', userId).eq('days.date', today).maybeSingle();
     if (error || !data) return null;
     return { 
-      id: data.id, 
-      dayId: data.day_id, 
-      userId: data.user_id, 
-      pizzaId: data.pizza_id, 
-      slotTime: data.slot_time as SlotTime,
+      id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slotTime: data.slot_time as SlotTime,
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
-      note: data.note || '', 
-      createdAt: data.created_at, 
-      updatedAt: data.updated_at 
+      note: data.note || '', createdAt: data.created_at, updatedAt: data.updated_at 
     };
   }
 
   async saveOrder(order: Partial<Order>): Promise<void> {
     const todayDate = new Date().toLocaleDateString('en-CA');
     let dayId = order.dayId;
-    
     if (!dayId) {
       const { data: dayData, error: dayError } = await supabase.from('days').upsert({ date: todayDate, status: 'OPEN' }, { onConflict: 'date' }).select().single();
       if (dayError) throw dayError;
       dayId = dayData.id;
     }
-
     const payload = { 
-      day_id: dayId, 
-      user_id: order.userId, 
-      pizza_id: order.pizzaId, 
-      slot_time: order.slotTime, 
-      add_modification_ids: order.addModificationIds || [],
-      remove_modification_ids: order.removeModificationIds || [],
-      note: order.note || '', 
-      updated_at: new Date().toISOString() 
+      day_id: dayId, user_id: order.userId, pizza_id: order.pizzaId, slot_time: order.slotTime, 
+      add_modification_ids: order.addModificationIds || [], remove_modification_ids: order.removeModificationIds || [],
+      note: order.note || '', updated_at: new Date().toISOString() 
     };
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });
     if (error) await this.handleError(error, "Salvataggio ordine");
   }
 
   async resetSeasonalData(): Promise<void> {
-    const { error: ordersError } = await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (ordersError) throw ordersError;
-    const { error: daysError } = await supabase.from('days').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (daysError) throw daysError;
+    await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('days').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   }
 }
 
