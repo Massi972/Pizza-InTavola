@@ -1,6 +1,6 @@
 import { db } from './db';
 
-const base64ToArrayBuffer = (base64: string) => {
+const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -9,7 +9,7 @@ const base64ToArrayBuffer = (base64: string) => {
   return bytes.buffer;
 };
 
-const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)));
 };
 
@@ -24,17 +24,22 @@ export const registerPasskey = async (userId: string): Promise<boolean> => {
   try {
     const options = await db.getWebAuthnRegisterOptions(userId);
     
-    // Preparazione opzioni per l'API del browser
-    // Fix: Explicitly cast string literals to WebAuthn specific types to satisfy TypeScript strict literal checks
+    // Costruzione esplicita per soddisfare i tipi strict di TypeScript
     const publicKey: PublicKeyCredentialCreationOptions = {
-      ...options,
+      challenge: base64ToArrayBuffer(options.challenge),
+      rp: options.rp,
+      user: {
+        id: base64ToArrayBuffer(options.user.id),
+        name: options.user.name,
+        displayName: options.user.displayName,
+      },
+      pubKeyCredParams: options.pubKeyCredParams.map((p: any) => ({
+        alg: p.alg,
+        type: p.type as "public-key"
+      })),
+      timeout: options.timeout,
       attestation: options.attestation as AttestationConveyancePreference,
       authenticatorSelection: options.authenticatorSelection as AuthenticatorSelectionCriteria,
-      challenge: base64ToArrayBuffer(options.challenge),
-      user: {
-        ...options.user,
-        id: base64ToArrayBuffer(options.user.id),
-      }
     };
 
     const credential = (await navigator.credentials.create({ publicKey })) as any;
@@ -63,11 +68,11 @@ export const authenticatePasskey = async (): Promise<any> => {
   try {
     const options = await db.getWebAuthnLoginOptions();
     
-    // Fix: cast userVerification to UserVerificationRequirement to match browser expectations
     const publicKey: PublicKeyCredentialRequestOptions = {
-      ...options,
-      userVerification: options.userVerification as UserVerificationRequirement,
       challenge: base64ToArrayBuffer(options.challenge),
+      timeout: options.timeout,
+      userVerification: options.userVerification as UserVerificationRequirement,
+      rpId: options.rpId,
     };
 
     const assertion = (await navigator.credentials.get({ publicKey })) as any;

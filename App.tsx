@@ -12,7 +12,7 @@ import AdminCalendar from './views/AdminCalendar';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
-const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; // Logout immediato al cambio visibilità
+const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; // Logout sempre immediato
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
     localStorage.removeItem('pizzastaff_auth');
+    localStorage.removeItem('pizzastaff_last_background_at');
     setView('dashboard');
   }, []);
 
@@ -34,27 +35,30 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        // App in background
         localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
-      } else {
+      } else if (document.visibilityState === 'visible') {
+        // App tornata in foreground
         const lastBg = localStorage.getItem('pizzastaff_last_background_at');
-        if (lastBg) {
+        if (lastBg && auth.isAuthenticated) {
           const elapsed = Date.now() - parseInt(lastBg);
-          if (elapsed >= BACKGROUND_LOGOUT_THRESHOLD_MS && auth.isAuthenticated) {
+          if (elapsed >= BACKGROUND_LOGOUT_THRESHOLD_MS) {
             handleLogout();
-            // Opzionale: Mostra un toast di sistema o log
-            console.log("Sessione invalidata per inattività in background.");
           }
-          localStorage.removeItem('pizzastaff_last_background_at');
         }
       }
     };
 
+    const handlePageHide = () => {
+      if (auth.isAuthenticated) handleLogout();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handleLogout); // Extra safety per chiusura tab
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handleLogout);
+      window.removeEventListener('pagehide', handlePageHide);
     };
   }, [auth.isAuthenticated, handleLogout]);
 

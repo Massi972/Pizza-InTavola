@@ -12,8 +12,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBack }) => {
   return (
-    <div className="min-h-dvh flex flex-col w-full max-w-lg mx-auto bg-[#F2F2F7] relative overflow-x-hidden">
-      {/* Header con padding adattivo per il notch di iPhone */}
+    <div className="min-h-full flex flex-col w-full max-w-lg mx-auto bg-[#F2F2F7] relative">
       <header className="sticky top-0 z-40 ios-blur border-b border-[#C6C6C8] px-4 pb-3 safe-header-padding flex items-center justify-between">
         <div className="flex items-center gap-2">
           {onBack && (
@@ -33,8 +32,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBac
         )}
       </header>
       
-      {/* Main content con padding inferiore per non essere coperto dalla barra di navigazione */}
-      <main className="flex-1 p-4 pb-[calc(100px+env(safe-area-inset-bottom))] safe-x-padding">
+      <main className="flex-1 p-4 pb-[calc(100px+env(safe-area-inset-bottom))]">
         {children}
       </main>
     </div>
