@@ -24,7 +24,6 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showSqlHelp, setShowSqlHelp] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -62,9 +61,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const toggleDayOverride = async (dateStr: string, currentInfo: any) => {
-    // Ciclo: Default -> Force Open -> Force Closed -> Default
     let newType: OverrideType | 'DELETE';
-    
     if (!currentInfo.isForced) {
       newType = OverrideType.FORCE_OPEN;
     } else if (currentInfo.label.includes('APERTO')) {
@@ -77,22 +74,17 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       if (newType === 'DELETE') {
         await db.deleteOverride(dateStr);
       } else {
-        await db.saveOverride({
-          date: dateStr,
-          type: newType,
-          note: 'Override manuale'
-        });
+        await db.saveOverride({ date: dateStr, type: newType, note: 'Manuale' });
       }
-      loadData(); // Ricarica per aggiornare l'anteprima
+      loadData();
     } catch (err) {
-      alert("Errore modifica eccezione");
+      alert("Errore modifica");
     }
   };
 
   const toggleDay = async (dayId: string) => {
     if (!settings) return;
     setSavingId(dayId);
-    
     const currentActive = settings.active_days || [];
     const newActive = currentActive.includes(dayId)
       ? currentActive.filter(d => d !== dayId)
@@ -102,7 +94,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       await db.updateSettings({ active_days: newActive });
       setSettings({ ...settings, active_days: newActive });
     } catch (err: any) {
-      alert("Errore nel salvataggio del loop.");
+      alert("Errore salvataggio");
     } finally {
       setSavingId(null);
     }
@@ -113,7 +105,6 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const now = new Date();
     const activeDays = settings?.active_days || [];
     const cutoff = settings?.cutoff_time || '16:30';
-    
     for (let i = 0; i < 14; i++) {
       const d = new Date(now);
       d.setDate(now.getDate() + i);
@@ -127,56 +118,48 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <Layout title="Calendario e Orari" onBack={onBack}>
+    <Layout title="Programmazione" onBack={onBack}>
       <div className="space-y-6">
-        
-        {/* Sezione Orario Limite */}
+        {/* Orario Cutoff */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <ClockIcon size={18} className="text-[#FF9500]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Orario Massimo Ordini</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Orario Chiusura Automatica</p>
           </div>
-          <Card className="p-5 flex items-center justify-between">
+          <Card className="p-5 flex items-center justify-between bg-white">
             <div>
-              <p className="text-sm font-bold">Chiusura automatica</p>
-              <p className="text-xs text-[#8E8E93]">Ora limite per ordinare oggi</p>
+              <p className="text-sm font-bold">Limite Ordini Staff</p>
+              <p className="text-[10px] text-[#8E8E93] font-bold uppercase tracking-tighter">Oltre quest'ora non si ordina più</p>
             </div>
             <input 
               type="time" 
-              className="bg-[#F2F2F7] border-none rounded-xl px-4 py-2 font-black text-lg text-[#007AFF] outline-none"
+              className="bg-[#F2F2F7] border-none rounded-2xl px-5 py-3 font-black text-xl text-[#007AFF] outline-none shadow-inner"
               value={settings?.cutoff_time || '16:30'}
               onChange={(e) => handleCutoffChange(e.target.value)}
             />
           </Card>
         </section>
 
-        {/* Sezione Loop Settimanale */}
+        {/* Loop Giornaliero */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Calendar size={18} className="text-[#007AFF]" />
-            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Aperture Ricorrenti (Loop)</p>
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Giorni di Apertura (Loop)</p>
           </div>
-          
-          <Card className="p-4">
+          <Card className="p-4 bg-white">
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
                 const isActive = (settings?.active_days || []).includes(day.id);
-                const isSaving = savingId === day.id;
-                
                 return (
                   <button
                     key={day.id}
-                    disabled={!!savingId}
                     onClick={() => toggleDay(day.id)}
-                    className={`h-14 rounded-2xl flex flex-col items-center justify-center transition-all relative overflow-hidden active:scale-90 disabled:opacity-80 ${
-                      isActive 
-                        ? 'bg-[#007AFF] text-white shadow-lg' 
-                        : 'bg-[#F2F2F7] text-[#8E8E93]'
+                    className={`h-16 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
+                      isActive ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-200' : 'bg-[#F2F2F7] text-[#8E8E93]'
                     }`}
                   >
-                    <span className="text-[10px] font-black uppercase">{day.label}</span>
-                    {isActive && !isSaving && <Check size={14} className="mt-1" />}
-                    {isSaving && <div className="loading-spinner !border-white mt-1 !w-3 !h-3" />}
+                    <span className="text-[11px] font-black uppercase">{day.label}</span>
+                    {isActive && <Check size={14} className="mt-1" />}
                   </button>
                 );
               })}
@@ -185,53 +168,37 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </section>
 
         {/* Anteprima e Eccezioni */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Plus size={18} className="text-[#34C759]" />
-              <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Anteprima e Eccezioni</p>
-            </div>
-          </div>
-          <p className="text-[10px] text-[#8E8E93] italic px-1">Clicca su un giorno per forzare l'apertura o la chiusura.</p>
-
+        <section className="space-y-3 pb-10">
+          <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest px-1">Anteprima Prossimi 14 Giorni</p>
           <div className="space-y-2">
             {getNextTwoWeeks().map(({ dateStr, info }) => (
               <Card 
                 key={dateStr} 
                 onClick={() => toggleDayOverride(dateStr, info)}
-                className={`p-3 flex justify-between items-center border-l-4 cursor-pointer active:scale-[0.98] transition-all ${
+                className={`p-3 flex justify-between items-center border-l-4 cursor-pointer active:scale-[0.98] transition-all bg-white ${
                   info.isActive ? 'border-green-500' : 'border-gray-200'
-                } ${info.isForced ? 'bg-blue-50/30' : ''}`}
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="text-center min-w-[40px]">
-                    <p className="text-[9px] font-black text-[#8E8E93] uppercase">{info.dayName}</p>
-                    <p className="text-sm font-black">{dateStr.split('-')[2]}</p>
+                  <div className="text-center min-w-[35px]">
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase leading-none">{info.dayName}</p>
+                    <p className="text-sm font-black mt-0.5">{dateStr.split('-')[2]}</p>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-[#1c1c1e]">{formatDate(dateStr)}</span>
-                      {info.isToday && <span className="text-[8px] bg-[#007AFF] text-white px-1.5 py-0.5 rounded-full font-bold">OGGI</span>}
+                      {info.isToday && <span className="text-[8px] bg-[#007AFF] text-white px-1.5 py-0.5 rounded-full font-black">OGGI</span>}
                     </div>
-                    {info.isForced && (
-                      <span className="text-[8px] font-black text-[#007AFF] uppercase tracking-tighter">Eccezione Manuale</span>
-                    )}
+                    {info.isForced && <span className="text-[8px] font-black text-[#007AFF] uppercase tracking-tighter">Modifica Manuale</span>}
                   </div>
                 </div>
-                <div className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-tight ${info.colorClass}`}>
+                <div className={`text-[9px] font-black px-2.5 py-1.5 rounded-xl uppercase tracking-tight ${info.colorClass}`}>
                   {info.label}
                 </div>
               </Card>
             ))}
           </div>
         </section>
-
-        <button 
-          onClick={loadData}
-          className="w-full py-4 flex items-center justify-center gap-2 text-[#8E8E93] text-xs font-bold uppercase tracking-widest"
-        >
-          <RotateCcw size={14} /> Aggiorna Anteprima
-        </button>
       </div>
     </Layout>
   );
