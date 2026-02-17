@@ -130,9 +130,12 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     setSubmitting(true);
     setErrorMessage(null);
     try {
+      // Usiamo una variabile locale per il dayId per sicurezza durante l'invio
+      const targetDayId = currentDay?.id || undefined;
+      
       const orderPayload: Partial<Order> = {
         id: myOrder?.id,
-        dayId: currentDay?.id || undefined, // db.saveOrder creerà il giorno se undefined
+        dayId: targetDayId,
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
@@ -140,18 +143,21 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         removeModificationIds: selectedRemoveIds,
         note: ''
       };
+
       await db.saveOrder(orderPayload);
       
-      // Aggiorniamo lo stato locale dell'ordine
+      // Recupero immediato dell'ordine salvato per aggiornare la UI locale
       const updatedOrder = await db.getUserOrderToday(user.id);
       setMyOrder(updatedOrder);
       
+      // Reset stati UI
       setShowRecap(false);
       setSelectedPizza(null);
       setIsEditing(false);
       setShowSuccess(true);
     } catch (err: any) {
-      setErrorMessage(err.message || "Errore durante il salvataggio dell'ordine");
+      console.error("Errore ordine:", err);
+      setErrorMessage(err.message || "Errore durante il salvataggio. Riprova.");
     } finally {
       setSubmitting(false);
     }

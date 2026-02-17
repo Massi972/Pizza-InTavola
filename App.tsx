@@ -12,8 +12,8 @@ import AdminCalendar from './views/AdminCalendar';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
-// Portiamo la tolleranza a 30 secondi per evitare logout durante piccoli cali di segnale o notifiche
-const BACKGROUND_LOGOUT_THRESHOLD_MS = 30000; 
+// 2 secondi di tolleranza per evitare glitch tecnici, ma percepito come "sempre" dall'utente
+const BACKGROUND_LOGOUT_THRESHOLD_MS = 2000; 
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -29,14 +29,18 @@ const App: React.FC = () => {
     setAuth({ user: null, isAuthenticated: false });
     localStorage.removeItem('pizzastaff_auth');
     localStorage.removeItem('pizzastaff_last_background_at');
+    // Non cancelliamo pizzastaff_passkey_active perché serve per il login rapido
     setView('dashboard');
   }, []);
 
+  // --- SESSION GUARD GLOBALE ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        // L'app è andata in background, segniamo il tempo
         localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
       } else if (document.visibilityState === 'visible') {
+        // L'utente sta riaprendo l'app
         const lastBg = localStorage.getItem('pizzastaff_last_background_at');
         if (lastBg && auth.isAuthenticated) {
           const elapsed = Date.now() - parseInt(lastBg);
@@ -44,12 +48,25 @@ const App: React.FC = () => {
             handleLogout();
           }
         }
+        // Puliamo il timestamp per evitare logout doppi
         localStorage.removeItem('pizzastaff_last_background_at');
       }
     };
 
+    // Gestione chiusura tab o browser
+    const handlePageHide = () => {
+      if (auth.isAuthenticated) {
+        localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
   }, [auth.isAuthenticated, handleLogout]);
 
   useEffect(() => {
