@@ -97,30 +97,31 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     setSelectedRemoveIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [pizzaList, modList, day, order, globalSettings, dayOverrides] = await Promise.all([
+        db.getPizzas(),
+        db.getModifications(),
+        db.getCurrentDay(),
+        db.getUserOrderToday(user.id),
+        db.getSettings(),
+        db.getOverrides()
+      ]);
+      setPizzas(pizzaList.filter(p => p.active));
+      setModifications(modList || []);
+      setCurrentDay(day);
+      setMyOrder(order);
+      setSettings(globalSettings);
+      setOverrides(dayOverrides);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Errore caricamento dati");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [pizzaList, modList, day, order, globalSettings, dayOverrides] = await Promise.all([
-          db.getPizzas(),
-          db.getModifications(),
-          db.getCurrentDay(),
-          db.getUserOrderToday(user.id),
-          db.getSettings(),
-          db.getOverrides()
-        ]);
-        setPizzas(pizzaList.filter(p => p.active));
-        setModifications(modList || []);
-        setCurrentDay(day);
-        setMyOrder(order);
-        setSettings(globalSettings);
-        setOverrides(dayOverrides);
-      } catch (err: any) {
-        setErrorMessage(err.message || "Errore nel caricamento dei dati");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [user.id]);
 
@@ -129,9 +130,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      const order: Partial<Order> = {
+      const orderPayload: Partial<Order> = {
         id: myOrder?.id,
-        dayId: currentDay?.id, 
+        dayId: currentDay?.id || undefined, // db.saveOrder creerà il giorno se undefined
         userId: user.id,
         pizzaId: selectedPizza.id,
         slotTime: slot,
@@ -139,13 +140,19 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         removeModificationIds: selectedRemoveIds,
         note: ''
       };
-      await db.saveOrder(order);
+      await db.saveOrder(orderPayload);
+      
+      // Aggiorniamo lo stato locale dell'ordine
+      const updatedOrder = await db.getUserOrderToday(user.id);
+      setMyOrder(updatedOrder);
+      
       setShowRecap(false);
-      setShowSuccess(true);
       setSelectedPizza(null);
-      setTimeout(() => onLogout(), 2000);
+      setIsEditing(false);
+      setShowSuccess(true);
     } catch (err: any) {
-      setErrorMessage(err.message || "Errore durante il salvataggio");
+      setErrorMessage(err.message || "Errore durante il salvataggio dell'ordine");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -167,7 +174,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         }
       }
     } catch (err: any) {
-      alert("Errore: " + err.message);
+      alert("Errore biometria: " + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -183,7 +190,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       <div className="space-y-5">
         <div className="pt-2 pb-1">
           <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
-          <p className="text-base font-bold text-[#8E8E93] mt-1">Cosa ti prepariamo oggi?</p>
+          <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
         </div>
 
         {!canOrder && (
@@ -202,12 +209,16 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <Card className={`p-5 border-2 max-w-2xl mx-auto ${availability.isActive ? 'border-[#34C759] shadow-lg' : 'border-[#C6C6C8] opacity-80 grayscale'}`}>
             <div className="flex justify-between items-start gap-3 mb-5">
               <div className="flex-1">
-                <p className={`text-[9px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-[0.2em] mb-1.5`}>Il tuo ordine</p>
+                <p className={`text-[9px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-[0.2em] mb-1.5`}>Il tuo ordine attuale</p>
                 <h2 className="text-xl font-black truncate">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {myOrder.addModificationIds?.map(id => {
                     const mod = modifications.find(m => m.id === id);
                     return mod ? <span key={id} className="text-[9px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">+{mod.name}</span> : null;
+                  })}
+                  {myOrder.removeModificationIds?.map(id => {
+                    const mod = modifications.find(m => m.id === id);
+                    return mod ? <span key={id} className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-700">-{mod.name}</span> : null;
                   })}
                 </div>
               </div>
@@ -219,8 +230,14 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             {canOrder && (
               <Button onClick={() => {
                 const p = pizzas.find(px => px.id === myOrder.pizzaId);
-                if(p) { setSelectedPizza(p); setSlot(myOrder.slotTime); setSelectedAddIds(myOrder.addModificationIds || []); setSelectedRemoveIds(myOrder.removeModificationIds || []); setIsEditing(true); }
-              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">Modifica Scelta</Button>
+                if(p) { 
+                  setSelectedPizza(p); 
+                  setSlot(myOrder.slotTime); 
+                  setSelectedAddIds(myOrder.addModificationIds || []); 
+                  setSelectedRemoveIds(myOrder.removeModificationIds || []); 
+                  setIsEditing(true); 
+                }
+              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">Cambia Scelta</Button>
             )}
           </Card>
         )}
@@ -240,7 +257,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   </div>
                   <p className="text-[11px] text-[#8E8E93] leading-snug flex-1 italic line-clamp-2">{pizza.ingredients?.join(', ')}</p>
                   <div className="mt-3 pt-2 border-t border-[#F2F2F7] flex justify-end">
-                    <span className="text-[#007AFF] text-[9px] font-black uppercase tracking-widest">Seleziona</span>
+                    <span className="text-[#007AFF] text-[9px] font-black uppercase tracking-widest">Scegli</span>
                   </div>
                 </Card>
               ))}
@@ -258,8 +275,20 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       {showSuccess && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 backdrop-blur-2xl animate-in fade-in duration-300">
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
-          <h2 className="text-xl font-black text-[#1c1c1e] tracking-tight">Ordine Ricevuto!</h2>
-          <p className="text-[#8E8E93] font-bold mt-1.5 uppercase tracking-widest text-[9px]">A tra poco in cucina</p>
+          <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight">Ordine Inviato!</h2>
+          <p className="text-[#8E8E93] font-bold mt-1.5 uppercase tracking-widest text-[9px] mb-8 text-center">Troverai la pizza pronta all'orario scelto.</p>
+          <div className="w-full max-w-xs space-y-3">
+            <Button fullWidth onClick={() => { setShowSuccess(false); setActiveTab('menu'); }}>Torna al Menu</Button>
+            <Button fullWidth variant="ghost" onClick={onLogout}>Esci dall'App</Button>
+          </div>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm p-4 rounded-xl shadow-2xl bg-[#FF3B30] text-white flex items-center gap-3 animate-in slide-in-from-top-10 duration-500">
+          <AlertCircle size={20} className="shrink-0" />
+          <p className="font-bold text-xs flex-1">{errorMessage}</p>
+          <button onClick={() => setErrorMessage(null)} className="p-1 hover:bg-white/20 rounded-full"><X size={16} /></button>
         </div>
       )}
 
@@ -296,11 +325,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 ) : (
                   <div className="p-4 flex items-center gap-3 opacity-50 grayscale bg-gray-50">
                     <Fingerprint size={18} className="text-gray-400" />
-                    <p className="text-[10px] font-bold">WebAuthn non supportato su questo browser</p>
+                    <p className="text-[10px] font-bold">Biometria non supportata</p>
                   </div>
                 )}
                 <div className="p-4 bg-gray-50 border-t border-gray-100">
-                   <p className="text-[10px] text-gray-500 italic">La passkey resta sul tuo dispositivo. Se cambi telefono, usa il PIN.</p>
+                   <p className="text-[10px] text-gray-500 italic">La passkey resta sul dispositivo. Se cambi telefono, usa il PIN.</p>
                 </div>
               </Card>
             </section>
@@ -387,9 +416,66 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   </div>
                 </section>
               </div>
-              <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting} className="!py-3.5 !text-base">Conferma Ordine</Button>
+              
+              <div className="pt-2">
+                {errorMessage && <p className="text-[10px] text-[#FF3B30] font-black mb-2 text-center uppercase tracking-tighter">{errorMessage}</p>}
+                <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting} className="!py-4 !text-base">
+                  {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Conferma Ordine'}
+                </Button>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {showRecap && selectedPizza && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => !submitting && setShowRecap(false)} />
+          <Card className="relative w-full max-w-xs p-5 space-y-5 shadow-2xl bg-white rounded-[24px]">
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-[#1c1c1e] tracking-tight">Riepilogo</h3>
+              <p className="text-[9px] text-[#8E8E93] font-bold uppercase tracking-widest">Verifica prima di inviare</p>
+            </div>
+
+            <div className="bg-[#F2F2F7] p-4 rounded-xl space-y-3">
+                <div className="flex flex-col">
+                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">La tua pizza</p>
+                  <p className="text-base font-black truncate">{selectedPizza.name}</p>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">Orario</p>
+                  <p className="text-base font-black">{slot}</p>
+                </div>
+
+              {(selectedAddIds.length > 0 || selectedRemoveIds.length > 0) && (
+                <div className="pt-2 border-t border-[#C6C6C8]/20 space-y-1.5">
+                  <div className="flex flex-wrap gap-1">
+                    {selectedAddIds.map(id => {
+                      const m = modifications.find(mod => mod.id === id);
+                      return m ? <span key={id} className="text-[8px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">+{m.name}</span> : null;
+                    })}
+                    {selectedRemoveIds.map(id => {
+                      const m = modifications.find(mod => mod.id === id);
+                      return m ? <span key={id} className="text-[8px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">-{m.name}</span> : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <Button fullWidth onClick={handleConfirmOrder} disabled={submitting} className="!py-3.5 !text-sm shadow-md">
+                {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'SÌ, INVIA ORDINE'}
+              </Button>
+              <button 
+                onClick={() => setShowRecap(false)}
+                disabled={submitting}
+                className="w-full py-2 text-[9px] font-black text-[#8E8E93] uppercase tracking-widest"
+              >
+                Annulla
+              </button>
+            </div>
+          </Card>
         </div>
       )}
     </Layout>

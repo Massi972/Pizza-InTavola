@@ -12,7 +12,8 @@ import AdminCalendar from './views/AdminCalendar';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
-const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; // Logout sempre immediato
+// Portiamo la tolleranza a 30 secondi per evitare logout durante piccoli cali di segnale o notifiche
+const BACKGROUND_LOGOUT_THRESHOLD_MS = 30000; 
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -31,14 +32,11 @@ const App: React.FC = () => {
     setView('dashboard');
   }, []);
 
-  // --- SESSION GUARD: Logout on Background ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // App in background
         localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
       } else if (document.visibilityState === 'visible') {
-        // App tornata in foreground
         const lastBg = localStorage.getItem('pizzastaff_last_background_at');
         if (lastBg && auth.isAuthenticated) {
           const elapsed = Date.now() - parseInt(lastBg);
@@ -46,20 +44,12 @@ const App: React.FC = () => {
             handleLogout();
           }
         }
+        localStorage.removeItem('pizzastaff_last_background_at');
       }
     };
 
-    const handlePageHide = () => {
-      if (auth.isAuthenticated) handleLogout();
-    };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [auth.isAuthenticated, handleLogout]);
 
   useEffect(() => {
