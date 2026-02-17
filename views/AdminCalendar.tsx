@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { db, GlobalSettings } from '../services/db';
 import { DayOverride, Day, OverrideType } from '../types';
@@ -24,6 +23,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -50,13 +50,22 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleCutoffChange = async (newTime: string) => {
     if (!settings) return;
-    const oldTime = settings.cutoff_time;
-    setSettings({ ...settings, cutoff_time: newTime });
+    setIsSaving(true);
+    const updatedSettings = { ...settings, cutoff_time: newTime };
+    
+    // Aggiornamento ottimistico della UI
+    setSettings(updatedSettings);
+    
     try {
-      await db.updateSettings({ cutoff_time: newTime });
-    } catch (err) {
-      setSettings({ ...settings, cutoff_time: oldTime });
-      alert("Errore salvataggio orario");
+      // Invia l'oggetto completo al DB per evitare errori di vincolo NOT NULL
+      await db.updateSettings(updatedSettings);
+      setError(null);
+    } catch (err: any) {
+      setError("Errore salvataggio orario: " + err.message);
+      // Rollback in caso di errore
+      loadData();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -78,23 +87,29 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }
       loadData();
     } catch (err) {
-      alert("Errore modifica");
+      alert("Errore modifica eccezione");
     }
   };
 
   const toggleDay = async (dayId: string) => {
     if (!settings) return;
     setSavingId(dayId);
+    
     const currentActive = settings.active_days || [];
     const newActive = currentActive.includes(dayId)
       ? currentActive.filter(d => d !== dayId)
       : [...currentActive, dayId];
 
+    const updatedSettings = { ...settings, active_days: newActive };
+
     try {
-      await db.updateSettings({ active_days: newActive });
-      setSettings({ ...settings, active_days: newActive });
+      // Invia l'oggetto completo al DB per coerenza
+      await db.updateSettings(updatedSettings);
+      setSettings(updatedSettings);
+      setError(null);
     } catch (err: any) {
-      alert("Errore salvataggio");
+      setError("Errore salvataggio giorni: " + err.message);
+      loadData();
     } finally {
       setSavingId(null);
     }
@@ -120,6 +135,12 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   return (
     <Layout title="Programmazione" onBack={onBack}>
       <div className="space-y-6">
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-[11px] font-bold flex items-center gap-2 animate-in fade-in">
+            <AlertCircle size={16} /> {error}
+          </div>
+        )}
+
         {/* Orario Cutoff */}
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
@@ -131,12 +152,20 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <p className="text-sm font-bold">Limite Ordini Staff</p>
               <p className="text-[10px] text-[#8E8E93] font-bold uppercase tracking-tighter">Oltre quest'ora non si ordina più</p>
             </div>
-            <input 
-              type="time" 
-              className="bg-[#F2F2F7] border-none rounded-2xl px-5 py-3 font-black text-xl text-[#007AFF] outline-none shadow-inner"
-              value={settings?.cutoff_time || '16:30'}
-              onChange={(e) => handleCutoffChange(e.target.value)}
-            />
+            <div className="relative">
+              <input 
+                type="time" 
+                className={`bg-[#F2F2F7] border-none rounded-2xl px-5 py-3 font-black text-xl text-[#007AFF] outline-none shadow-inner transition-opacity ${isSaving ? 'opacity-50' : ''}`}
+                value={settings?.cutoff_time || '16:30'}
+                onChange={(e) => handleCutoffChange(e.target.value)}
+                disabled={isSaving}
+              />
+              {isSaving && (
+                <div className="absolute -top-1 -right-1">
+                  <div className="loading-spinner !w-3 !h-3" />
+                </div>
+              )}
+            </div>
           </Card>
         </section>
 
@@ -150,16 +179,24 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(day => {
                 const isActive = (settings?.active_days || []).includes(day.id);
+                const isThisSaving = savingId === day.id;
                 return (
                   <button
                     key={day.id}
-                    onClick={() => toggleDay(day.id)}
-                    className={`h-16 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
+                    onClick={() => !isThisSaving && toggleDay(day.id)}
+                    disabled={isThisSaving}
+                    className={`h-16 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 relative ${
                       isActive ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-200' : 'bg-[#F2F2F7] text-[#8E8E93]'
                     }`}
                   >
-                    <span className="text-[11px] font-black uppercase">{day.label}</span>
-                    {isActive && <Check size={14} className="mt-1" />}
+                    {isThisSaving ? (
+                      <div className="loading-spinner border-white/30 border-t-white" />
+                    ) : (
+                      <>
+                        <span className="text-[11px] font-black uppercase">{day.label}</span>
+                        {isActive && <Check size={14} className="mt-1" />}
+                      </>
+                    )}
                   </button>
                 );
               })}
