@@ -12,12 +12,13 @@ import AdminCalendar from './views/AdminCalendar';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
-// 2 secondi di tolleranza per evitare glitch tecnici, ma percepito come "sempre" dall'utente
-const BACKGROUND_LOGOUT_THRESHOLD_MS = 2000; 
+// Soglia zero: sicurezza massima, nessun tempo di tolleranza.
+const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; 
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
-    const saved = localStorage.getItem('pizzastaff_auth');
+    // Usiamo sessionStorage per far sì che la sessione muoia con la chiusura del processo/tab
+    const saved = sessionStorage.getItem('pizzastaff_auth');
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
@@ -27,37 +28,23 @@ const App: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
-    localStorage.removeItem('pizzastaff_auth');
+    sessionStorage.removeItem('pizzastaff_auth');
     localStorage.removeItem('pizzastaff_last_background_at');
-    // Non cancelliamo pizzastaff_passkey_active perché serve per il login rapido
     setView('dashboard');
   }, []);
 
-  // --- SESSION GUARD GLOBALE ---
+  // --- SICUREZZA TOTALE: Logout immediato al cambio visibilità ---
   useEffect(() => {
     const handleVisibilityChange = () => {
+      // Se l'app non è più visibile (chiusa, swipe, cambio app, lock screen)
       if (document.visibilityState === 'hidden') {
-        // L'app è andata in background, segniamo il tempo
-        localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
-      } else if (document.visibilityState === 'visible') {
-        // L'utente sta riaprendo l'app
-        const lastBg = localStorage.getItem('pizzastaff_last_background_at');
-        if (lastBg && auth.isAuthenticated) {
-          const elapsed = Date.now() - parseInt(lastBg);
-          if (elapsed >= BACKGROUND_LOGOUT_THRESHOLD_MS) {
-            handleLogout();
-          }
-        }
-        // Puliamo il timestamp per evitare logout doppi
-        localStorage.removeItem('pizzastaff_last_background_at');
+        handleLogout();
       }
     };
 
-    // Gestione chiusura tab o browser
+    // Gestione specifica per la chiusura forzata o swipe away su iOS/Android
     const handlePageHide = () => {
-      if (auth.isAuthenticated) {
-        localStorage.setItem('pizzastaff_last_background_at', Date.now().toString());
-      }
+      handleLogout();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -67,11 +54,11 @@ const App: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [auth.isAuthenticated, handleLogout]);
+  }, [handleLogout]);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
-      localStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
+      sessionStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
     }
     
     const checkSupport = async () => {
