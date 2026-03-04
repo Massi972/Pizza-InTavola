@@ -187,6 +187,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       )}
 
       <div className="space-y-6">
+        {/* Banner Errore Database */}
+        {error && (
+          <div className="bg-red-50 p-4 rounded-2xl border border-red-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 text-[#FF3B30]">
+              <AlertCircle size={20} className="shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold">Errore Database</p>
+                <p className="text-xs opacity-80">{error.message}</p>
+              </div>
+              <button onClick={() => setError(null)} className="p-1"><X size={16} /></button>
+            </div>
+            
+            {(error.message.includes('cutoff_time') || error.message.includes('settings')) && (
+              <div className="p-3 bg-white/50 rounded-lg border border-red-200">
+                <p className="text-[10px] font-bold uppercase text-red-800 mb-1">Copia ed esegui in Supabase SQL Editor:</p>
+                <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
+{`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';
+-- Se la tabella settings non esiste proprio:
+CREATE TABLE IF NOT EXISTS settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  master_code TEXT DEFAULT 'PIZZA2025',
+  override_cutoff BOOLEAN DEFAULT false,
+  manager_phone TEXT,
+  active_days TEXT[] DEFAULT ARRAY['MON', 'TUE', 'WED', 'THU', 'FRI'],
+  cutoff_time TEXT DEFAULT '16:30'
+);
+INSERT INTO settings (id) VALUES ('global') ON CONFLICT (id) DO NOTHING;`}
+                </code>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Card Personale */}
         <Card className="p-4 border-l-4 border-[#FF9500] bg-orange-50/30">
            <div className="flex justify-between items-center">

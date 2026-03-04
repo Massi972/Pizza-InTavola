@@ -158,7 +158,13 @@ class DB {
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
-    if (error) await this.handleError(error, "Salvataggio impostazioni");
+    if (error) {
+      console.error("Errore Supabase updateSettings:", error);
+      if (error.message?.includes("cutoff_time")) {
+        throw new Error("Colonna 'cutoff_time' mancante nella tabella 'settings'.");
+      }
+      await this.handleError(error, "Salvataggio impostazioni");
+    }
   }
 
   async getOverrides(): Promise<DayOverride[]> {
@@ -180,7 +186,7 @@ class DB {
   async getUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('*').order('last_name', { ascending: true });
     if (error) await this.handleError(error, "Caricamento utenti");
-    return data.map(u => ({ 
+    return (data || []).map(u => ({ 
       id: u.id, firstName: u.first_name, lastName: u.last_name, 
       phone_e164: u.phone_e164 || '', pin: u.pin, role: u.role, active: u.active 
     }));
@@ -221,7 +227,7 @@ class DB {
   async getPizzas(): Promise<Pizza[]> {
     const { data, error } = await supabase.from('pizzas').select('*').order('name', { ascending: true });
     if (error) await this.handleError(error, "Caricamento pizze");
-    return data.map(p => ({ 
+    return (data || []).map(p => ({ 
       id: p.id, name: p.name, description: p.description || '', 
       ingredients: p.ingredients || [], allergens: p.allergens || [], 
       active: p.active, isVegetarian: p.is_vegetarian 
