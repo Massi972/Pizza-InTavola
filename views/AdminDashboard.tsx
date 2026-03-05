@@ -199,13 +199,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
               <button onClick={() => setError(null)} className="p-1"><X size={16} /></button>
             </div>
             
-            {(error.message.includes('cutoff_time') || error.message.includes('settings')) && (
+            {(error.message.includes('pizzas') || error.message.includes('settings') || error.message.includes('users') || error.message.includes('orders')) && (
               <div className="p-3 bg-white/50 rounded-lg border border-red-200">
-                <p className="text-[10px] font-bold uppercase text-red-800 mb-1">Copia ed esegui in Supabase SQL Editor:</p>
+                <p className="text-[10px] font-bold uppercase text-red-800 mb-1">Copia ed esegui in Supabase SQL Editor per creare le tabelle:</p>
                 <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
-{`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';
--- Se la tabella settings non esiste proprio:
-CREATE TABLE IF NOT EXISTS settings (
+{`-- 1. Pulizia totale (rimuove sia tabelle che viste esistenti in modo sicuro)
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    -- Rimuove le viste se esistono
+    FOR r IN (SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname IN ('settings', 'users', 'pizzas', 'modifications', 'days', 'day_overrides', 'orders')) LOOP
+        EXECUTE 'DROP VIEW IF EXISTS ' || quote_ident(r.viewname) || ' CASCADE';
+    END LOOP;
+    
+    -- Rimuove le tabelle se esistono
+    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('settings', 'users', 'pizzas', 'modifications', 'days', 'day_overrides', 'orders')) LOOP
+        EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+    END LOOP;
+END $$;
+
+-- 2. Creazione tabelle reali
+CREATE TABLE settings (
   id TEXT PRIMARY KEY DEFAULT 'global',
   master_code TEXT DEFAULT 'PIZZA2025',
   override_cutoff BOOLEAN DEFAULT false,
@@ -213,7 +228,82 @@ CREATE TABLE IF NOT EXISTS settings (
   active_days TEXT[] DEFAULT ARRAY['MON', 'TUE', 'WED', 'THU', 'FRI'],
   cutoff_time TEXT DEFAULT '16:30'
 );
-INSERT INTO settings (id) VALUES ('global') ON CONFLICT (id) DO NOTHING;`}
+INSERT INTO settings (id) VALUES ('global');
+
+CREATE TABLE users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT,
+  phone_e164 TEXT,
+  pin TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE pizzas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  ingredients TEXT[],
+  allergens TEXT[],
+  active BOOLEAN DEFAULT true,
+  is_vegetarian BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE modifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT CHECK (type IN ('ADD', 'REMOVE')),
+  active BOOLEAN DEFAULT true,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE days (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE UNIQUE NOT NULL,
+  status TEXT NOT NULL,
+  opened_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ
+);
+
+CREATE TABLE day_overrides (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE UNIQUE NOT NULL,
+  type TEXT NOT NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE orders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  day_id UUID REFERENCES days(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  pizza_id UUID REFERENCES pizzas(id) ON DELETE CASCADE,
+  slot_time TEXT NOT NULL,
+  add_modification_ids UUID[],
+  remove_modification_ids UUID[],
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(day_id, user_id)
+);
+
+-- 3. Inserisci Admin iniziale (PIN: 1234)
+INSERT INTO users (first_name, last_name, pin, role) 
+VALUES ('Admin', 'Principale', '1234', 'ADMIN');
+
+-- 4. Disabilita RLS
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pizzas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE modifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE days DISABLE ROW LEVEL SECURITY;
+ALTER TABLE day_overrides DISABLE ROW LEVEL SECURITY;
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
                 </code>
               </div>
             )}

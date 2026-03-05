@@ -199,6 +199,18 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
         </div>
 
+        {errorMessage && (errorMessage.includes('pizzas') || errorMessage.includes('settings')) && (
+          <div className="bg-red-50 p-4 rounded-2xl border border-red-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 text-[#FF3B30]">
+              <AlertCircle size={20} className="shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold">Configurazione Database Necessaria</p>
+                <p className="text-xs opacity-80">Le tabelle del database non sono state trovate. Contatta l'amministratore per eseguire lo script di setup in Supabase.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!canOrder && (
           <div className="bg-[#FF3B30] text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg">
             <div className="p-2 bg-white/20 rounded-full shrink-0"><Lock size={20} /></div>
@@ -386,9 +398,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         <div className="fixed inset-0 z-50 flex flex-col justify-end items-center overflow-hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !submitting && setSelectedPizza(null)} />
           <div className="relative bg-[#F2F2F7] w-full max-w-lg rounded-t-[28px] p-5 space-y-5 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90dvh] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+            <button 
+              onClick={() => !submitting && setSelectedPizza(null)}
+              className="absolute top-4 right-4 p-2 bg-[#C6C6C8]/20 hover:bg-[#C6C6C8]/40 rounded-full text-[#8E8E93] transition-colors z-10"
+            >
+              <X size={20} />
+            </button>
             <div className="w-10 h-1 bg-[#C6C6C8] rounded-full mx-auto shrink-0 mb-1" />
             <div className="text-center">
-              <h2 className="text-xl font-black text-[#1c1c1e] truncate">{selectedPizza.name}</h2>
+              <h2 className="text-xl font-black text-[#1c1c1e] truncate pr-10">{selectedPizza.name}</h2>
               <p className="text-[11px] text-[#8E8E93] mt-1 font-medium">{selectedPizza.ingredients?.join(', ')}</p>
             </div>
             <div className="space-y-5">
@@ -423,11 +441,17 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </section>
               </div>
               
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-2">
                 {errorMessage && <p className="text-[10px] text-[#FF3B30] font-black mb-2 text-center uppercase tracking-tighter">{errorMessage}</p>}
                 <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting} className="!py-4 !text-base">
                   {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Conferma Ordine'}
                 </Button>
+                <button 
+                  onClick={() => !submitting && setSelectedPizza(null)}
+                  className="w-full py-2 text-[10px] font-black text-[#8E8E93] uppercase tracking-widest"
+                >
+                  Annulla e torna al menu
+                </button>
               </div>
             </div>
           </div>
