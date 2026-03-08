@@ -188,6 +188,7 @@ class DB {
     if (error) await this.handleError(error, "Caricamento utenti");
     return (data || []).map(u => ({ 
       id: u.id, firstName: u.first_name, lastName: u.last_name, 
+      email: u.email || '',
       phone_e164: u.phone_e164 || '', pin: u.pin, role: u.role, active: u.active 
     }));
   }
@@ -197,6 +198,17 @@ class DB {
     if (error || !data) return null;
     return { 
       id: data.id, firstName: data.first_name, lastName: data.last_name, 
+      email: data.email || '',
+      phone_e164: data.phone_e164 || '', pin: data.pin, role: data.role, active: data.active 
+    };
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('active', true).maybeSingle();
+    if (error || !data) return null;
+    return { 
+      id: data.id, firstName: data.first_name, lastName: data.last_name, 
+      email: data.email || '',
       phone_e164: data.phone_e164 || '', pin: data.pin, role: data.role, active: data.active 
     };
   }
@@ -211,6 +223,7 @@ class DB {
   async saveUser(user: Partial<User>): Promise<void> {
     const payload = { 
       first_name: user.firstName, last_name: user.lastName, 
+      email: user.email,
       phone_e164: user.phone_e164, pin: user.pin, role: user.role, active: user.active 
     };
     const { error } = user.id 

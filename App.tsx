@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar'>('dashboard');
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
 
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
@@ -32,6 +33,31 @@ const App: React.FC = () => {
     localStorage.removeItem('pizzastaff_last_background_at');
     setView('dashboard');
   }, []);
+
+  // --- AUTO-LOGIN VIA EMAIL PARAMETER ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get('email');
+
+    if (email && !auth.isAuthenticated) {
+      const performAutoLogin = async () => {
+        setIsAutoLoggingIn(true);
+        try {
+          const user = await db.getUserByEmail(email);
+          if (user) {
+            setAuth({ user, isAuthenticated: true });
+            // Puliamo l'URL per evitare loop o confusione
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (error) {
+          console.error("Auto-login failed:", error);
+        } finally {
+          setIsAutoLoggingIn(false);
+        }
+      };
+      performAutoLogin();
+    }
+  }, [auth.isAuthenticated]);
 
   // --- SICUREZZA TOTALE: Logout immediato al cambio visibilità ---
   useEffect(() => {
@@ -84,6 +110,15 @@ const App: React.FC = () => {
     localStorage.setItem('pizzastaff_passkey_declined', 'true');
     setShowPasskeyPrompt(false);
   };
+
+  if (isAutoLoggingIn) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-[#F2F2F7] space-y-4">
+        <div className="loading-spinner border-[#007AFF] border-t-transparent w-10 h-10" />
+        <p className="text-sm font-bold text-[#8E8E93] uppercase tracking-widest animate-pulse">Accesso in corso...</p>
+      </div>
+    );
+  }
 
   if (!auth.isAuthenticated || !auth.user) {
     return <LoginView onLogin={handleLogin} />;
