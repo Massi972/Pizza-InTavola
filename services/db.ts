@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { User, Pizza, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
+import { User, Role, Pizza, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
 
 let supabaseInstance: SupabaseClient | null = null;
 
