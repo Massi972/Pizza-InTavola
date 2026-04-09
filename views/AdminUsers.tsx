@@ -119,8 +119,8 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
   };
 
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.phone_e164 || !editing?.email) {
-      setError('Tutti i campi (Nome, Cognome, Email, Telefono e PIN) sono obbligatori');
+    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.phone_e164) {
+      setError('Tutti i campi (Nome, Cognome, Telefono e PIN) sono obbligatori');
       return;
     }
     
@@ -188,7 +188,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
                       </div>
                       <div>
                         <h3 className="font-bold">{u.firstName} {u.lastName}</h3>
-                        <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">{u.role} • {u.email}</p>
+                        <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">{u.role}</p>
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -253,16 +253,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
                 </div>
               </div>
               
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Email (per login diretto da Glide)</label>
-                <Input 
-                  placeholder="email@esempio.com"
-                  type="email"
-                  value={editing.email || ''} 
-                  onChange={e => setEditing({...editing, email: e.target.value})} 
-                />
-              </div>
-
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (es. +393331234567)</label>
                 <Input 

@@ -14,12 +14,10 @@ import {
   Settings, 
   UserIcon,
   LogOut,
-  Sliders,
-  Fingerprint
+  Sliders
 } from '../components/Icons';
 import { getDayAvailability, getTodayDateString } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
-import { isBiometricAvailable, registerPasskey, revokePasskeys } from '../services/biometrics';
 
 interface WorkerDashboardProps {
   user: User;
@@ -48,27 +46,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [showSuccess, setShowSuccess] = useState(false);
   const [showRecap, setShowRecap] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  const [isBioSupported, setIsBioSupported] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(localStorage.getItem('pizzastaff_passkey_active') === 'true');
-  const [actionLoading, setActionLoading] = useState(false);
-
-  useEffect(() => {
-    const checkBio = async () => {
-      const available = await isBiometricAvailable();
-      setIsBioSupported(available);
-      
-      const serverHasPasskeys = await db.hasPasskeys(user.id);
-      if (serverHasPasskeys) {
-        localStorage.setItem('pizzastaff_passkey_active', 'true');
-        setBiometricEnabled(true);
-      } else {
-        localStorage.removeItem('pizzastaff_passkey_active');
-        setBiometricEnabled(false);
-      }
-    };
-    checkBio();
-  }, [user.id]);
 
   const availability = useMemo(() => {
     const today = getTodayDateString();
@@ -130,7 +107,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      // Usiamo una variabile locale per il dayId per sicurezza durante l'invio
       const targetDayId = currentDay?.id || undefined;
       
       const orderPayload: Partial<Order> = {
@@ -146,11 +122,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
       await db.saveOrder(orderPayload);
       
-      // Recupero immediato dell'ordine salvato per aggiornare la UI locale
       const updatedOrder = await db.getUserOrderToday(user.id);
       setMyOrder(updatedOrder);
       
-      // Reset stati UI
       setShowRecap(false);
       setSelectedPizza(null);
       setIsEditing(false);
@@ -160,29 +134,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       setErrorMessage(err.message || "Errore durante il salvataggio. Riprova.");
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleTogglePasskey = async () => {
-    setActionLoading(true);
-    try {
-      if (biometricEnabled) {
-        if (confirm("Vuoi disattivare l'accesso biometrico su tutti i dispositivi?")) {
-          await revokePasskeys(user.id);
-          setBiometricEnabled(false);
-          alert("Accesso rapido disattivato.");
-        }
-      } else {
-        const success = await registerPasskey(user.id);
-        if (success) {
-          setBiometricEnabled(true);
-          alert("Accesso rapido con Face ID / Impronta attivato ✅");
-        }
-      }
-    } catch (err: any) {
-      alert("Errore biometria: " + err.message);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -198,18 +149,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
           <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
         </div>
-
-        {errorMessage && (errorMessage.includes('pizzas') || errorMessage.includes('settings')) && (
-          <div className="bg-red-50 p-4 rounded-2xl border border-red-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-start gap-3 text-[#FF3B30]">
-              <AlertCircle size={20} className="shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-bold">Configurazione Database Necessaria</p>
-                <p className="text-xs opacity-80">Le tabelle del database non sono state trovate. Contatta l'amministratore per eseguire lo script di setup in Supabase.</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {!canOrder && (
           <div className="bg-[#FF3B30] text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg">
@@ -319,39 +258,6 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           </Card>
 
           <div className="grid grid-cols-1 gap-5">
-            <section className="space-y-2">
-              <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Sicurezza</p>
-              <Card className="overflow-hidden">
-                {isBioSupported ? (
-                  <div className="p-4 flex items-center justify-between hover:bg-[#F2F2F7] transition-colors cursor-pointer" onClick={handleTogglePasskey}>
-                    <div className="flex items-center gap-3">
-                      <div className={`p-1.5 rounded-lg ${biometricEnabled ? 'bg-green-100 text-green-600' : 'bg-[#F2F2F7] text-[#8E8E93]'}`}>
-                        <Fingerprint size={18} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold">Accesso Rapido</p>
-                        <p className="text-[9px] text-[#8E8E93] font-bold tracking-tight">Face ID / Touch ID</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {actionLoading && <div className="loading-spinner" />}
-                      <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center px-1 ${biometricEnabled ? 'bg-[#34C759]' : 'bg-[#C6C6C8]'}`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${biometricEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 flex items-center gap-3 opacity-50 grayscale bg-gray-50">
-                    <Fingerprint size={18} className="text-gray-400" />
-                    <p className="text-[10px] font-bold">Biometria non supportata</p>
-                  </div>
-                )}
-                <div className="p-4 bg-gray-50 border-t border-gray-100">
-                   <p className="text-[10px] text-gray-500 italic">La passkey resta sul dispositivo. Se cambi telefono, usa il PIN.</p>
-                </div>
-              </Card>
-            </section>
-
             <section className="space-y-2">
               <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Account</p>
               <Card className="divide-y divide-[#F2F2F7]">

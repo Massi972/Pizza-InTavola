@@ -16,19 +16,14 @@ const AdminModifications: React.FC<AdminModificationsProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [dbSetupNeeded, setDbSetupNeeded] = useState(false);
 
   const fetchMods = async () => {
     setLoading(true);
     setError('');
-    setDbSetupNeeded(false);
     try {
       const data = await db.getModifications();
       setMods(data);
     } catch (err: any) {
-      if (err.message.includes("Configurazione Database Mancante")) {
-        setDbSetupNeeded(true);
-      }
       setError(err.message);
     } finally {
       setLoading(false);
@@ -77,27 +72,11 @@ const AdminModifications: React.FC<AdminModificationsProps> = ({ onBack }) => {
   return (
     <Layout title="Gestione Variazioni" onBack={onBack}>
       <div className="space-y-4">
-        {dbSetupNeeded ? (
-          <Card className="p-6 border-2 border-red-200 bg-red-50 space-y-4">
-            <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle size={24} />
-              <h2 className="font-bold">Setup Database Richiesto</h2>
-            </div>
-            <p className="text-sm text-red-700 leading-relaxed">
-              La tabella <strong>modifications</strong> non è stata trovata nel database Supabase.
-              Per favore, esegui lo script SQL fornito nelle istruzioni per configurare correttamente il sistema.
-            </p>
-            <Button fullWidth onClick={fetchMods} variant="secondary">
-              <RefreshCw size={16} /> Riprova caricamento
-            </Button>
-          </Card>
-        ) : (
-          <Button fullWidth onClick={() => { setEditing({ type: 'ADD', active: true, sort_order: 0 }); setError(''); }}>
-            <Plus size={20} /> Nuova Variazione
-          </Button>
-        )}
+        <Button fullWidth onClick={() => { setEditing({ type: 'ADD', active: true, sort_order: 0 }); setError(''); }}>
+          <Plus size={20} /> Nuova Variazione
+        </Button>
 
-        {error && !dbSetupNeeded && (
+        {error && (
           <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100 flex items-center gap-2">
             <AlertCircle size={14} /> {error}
           </div>
@@ -107,7 +86,7 @@ const AdminModifications: React.FC<AdminModificationsProps> = ({ onBack }) => {
           <div className="flex justify-center py-20"><div className="loading-spinner" /></div>
         ) : (
           <div className="space-y-3">
-            {mods.length === 0 && !dbSetupNeeded ? (
+            {mods.length === 0 ? (
               <p className="text-center text-xs text-gray-400 py-10 italic">Nessuna variante definita.</p>
             ) : (
               mods.map(m => (

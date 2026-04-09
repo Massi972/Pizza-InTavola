@@ -171,15 +171,6 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <div className="flex-1">{error}</div>
               <button onClick={() => setError(null)} className="p-1 hover:bg-red-100 rounded-full"><X size={14} /></button>
             </div>
-            
-            {(error.includes('cutoff_time') || error.includes('settings')) && (
-              <div className="p-3 bg-white/50 rounded-lg border border-red-200 text-[#FF3B30]">
-                <p className="text-[9px] font-black uppercase mb-1">Esegui questo SQL in Supabase:</p>
-                <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
-{`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';`}
-                </code>
-              </div>
-            )}
           </div>
         )}
 
