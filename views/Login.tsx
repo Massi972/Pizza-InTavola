@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User } from '../types';
-import { PizzaIcon } from '../components/Icons';
+import { Fingerprint, PizzaIcon } from '../components/Icons';
+import { isBiometricAvailable, authenticatePasskey } from '../services/biometrics';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -11,6 +12,34 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isBioSupported, setIsBioSupported] = useState(false);
+  const [passkeyActive, setPasskeyActive] = useState(false);
+
+  useEffect(() => {
+    const checkBio = async () => {
+      const available = await isBiometricAvailable();
+      setIsBioSupported(available);
+      setPasskeyActive(localStorage.getItem('pizzastaff_passkey_active') === 'true');
+    };
+    checkBio();
+  }, []);
+
+  const handlePasskeyLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const user = await authenticatePasskey();
+      if (user) {
+        onLogin(user);
+      } else {
+        // Silenzioso o feedback leggero se annullato dall'utente
+      }
+    } catch (err) {
+      setError('Autenticazione biometrica fallita');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (pin.length < 4) return;
@@ -24,8 +53,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setError('PIN non valido');
         setPin('');
       }
-    } catch (err) {
-      setError('Errore di connessione');
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.message || 'Errore di connessione');
     } finally {
       setLoading(false);
     }
@@ -67,7 +97,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <button key={d} onClick={() => addDigit(d)} className="w-16 h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA] flex items-center justify-center mx-auto transition-colors">{d}</button>
               ))}
               
-              <div className="w-16 h-16" />
+              <button 
+                onClick={handlePasskeyLogin}
+                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto transition-all ${isBioSupported && passkeyActive ? 'text-[#007AFF] bg-white ios-shadow active:bg-[#E5E5EA]' : 'text-[#8E8E93] opacity-20 pointer-events-none'}`}
+              >
+                <Fingerprint size={32} />
+              </button>
 
               <button onClick={() => addDigit('0')} className="w-16 h-16 rounded-full bg-white text-2xl font-semibold ios-shadow active:bg-[#E5E5EA] flex items-center justify-center mx-auto">0</button>
               
