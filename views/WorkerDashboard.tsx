@@ -90,11 +90,19 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const removeOptions = useMemo(() => modifications.filter(m => m.type === 'REMOVE' && m.active), [modifications]);
 
   const handleToggleAdd = (id: string) => {
-    setSelectedAddIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    setSelectedAddIds(prev => {
+      const isSelected = prev.includes(id);
+      if (!isSelected && (prev.length + selectedRemoveIds.length) >= 2) return prev;
+      return isSelected ? prev.filter(i => i !== id) : [...prev, id];
+    });
   };
 
   const handleToggleRemove = (id: string) => {
-    setSelectedRemoveIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    setSelectedRemoveIds(prev => {
+      const isSelected = prev.includes(id);
+      if (!isSelected && (prev.length + selectedAddIds.length) >= 2) return prev;
+      return isSelected ? prev.filter(i => i !== id) : [...prev, id];
+    });
   };
 
   const fetchData = async () => {
@@ -416,27 +424,52 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
               </section>
               <div className="space-y-5">
                 <section className="space-y-2">
-                  <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Aggiungi (+)</p>
+                  <div className="flex justify-between items-center px-1">
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Aggiungi (+)</p>
+                    <p className="text-[8px] font-bold text-[#007AFF] uppercase">Max 2 variazioni totali</p>
+                  </div>
                   <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
                     {addOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna aggiunta</p>}
-                    {addOptions.map(opt => (
-                      <button key={opt.id} onClick={() => handleToggleAdd(opt.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors">
-                        <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedAddIds.includes(opt.id) ? 'bg-[#007AFF] border-[#007AFF]' : 'border-[#C6C6C8]'}`}>{selectedAddIds.includes(opt.id) && <Check size={12} className="text-white" strokeWidth={3} />}</div>
-                      </button>
-                    ))}
+                    {addOptions.map(opt => {
+                      const isSelected = selectedAddIds.includes(opt.id);
+                      const limitReached = !isSelected && (selectedAddIds.length + selectedRemoveIds.length) >= 2;
+                      return (
+                        <button 
+                          key={opt.id} 
+                          onClick={() => handleToggleAdd(opt.id)} 
+                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors ${limitReached ? 'opacity-40' : ''}`}
+                        >
+                          <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#007AFF] border-[#007AFF]' : 'border-[#C6C6C8]'}`}>
+                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
                 <section className="space-y-2">
-                  <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Togli (-)</p>
+                  <div className="flex justify-between items-center px-1">
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Togli (-)</p>
+                  </div>
                   <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
                     {removeOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna rimozione</p>}
-                    {removeOptions.map(opt => (
-                      <button key={opt.id} onClick={() => handleToggleRemove(opt.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors">
-                        <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedRemoveIds.includes(opt.id) ? 'bg-[#FF3B30] border-[#FF3B30]' : 'border-[#C6C6C8]'}`}>{selectedRemoveIds.includes(opt.id) && <Check size={12} className="text-white" strokeWidth={3} />}</div>
-                      </button>
-                    ))}
+                    {removeOptions.map(opt => {
+                      const isSelected = selectedRemoveIds.includes(opt.id);
+                      const limitReached = !isSelected && (selectedAddIds.length + selectedRemoveIds.length) >= 2;
+                      return (
+                        <button 
+                          key={opt.id} 
+                          onClick={() => handleToggleRemove(opt.id)} 
+                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors ${limitReached ? 'opacity-40' : ''}`}
+                        >
+                          <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#FF3B30] border-[#FF3B30]' : 'border-[#C6C6C8]'}`}>
+                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
               </div>
