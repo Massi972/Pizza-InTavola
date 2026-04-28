@@ -36,6 +36,13 @@ export interface Modification {
   sort_order?: number;
 }
 
+export interface PizzaFlag {
+  id: string;
+  name: string;
+  active: boolean;
+  sort_order?: number;
+}
+
 export enum DayStatus {
   OPEN = 'OPEN',
   CLOSED = 'CLOSED'
@@ -71,6 +78,7 @@ export interface Order {
   slotTime: SlotTime;
   addModificationIds: string[];
   removeModificationIds: string[];
+  flagIds: string[];
   note: string;
   createdAt: string;
   updatedAt: string;

@@ -9,6 +9,7 @@ import AdminUsers from './views/AdminUsers';
 import AdminHistory from './views/AdminHistory';
 import AdminModifications from './views/AdminModifications';
 import AdminCalendar from './views/AdminCalendar';
+import AdminFlags from './views/AdminFlags';
 import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
@@ -22,7 +23,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
-  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags'>('dashboard');
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false);
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
@@ -97,6 +98,7 @@ const App: React.FC = () => {
         {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
         {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
         {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
+        {view === 'flags' && <AdminFlags onBack={() => setView('dashboard')} />}
         {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
         {view === 'dashboard' && auth.user.role !== Role.WORKER && (
           <AdminDashboard 

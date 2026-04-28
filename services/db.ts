@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { User, Role, Pizza, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
+import { User, Role, Pizza, PizzaFlag, Order, Day, DayStatus, SlotTime, Modification, DayOverride } from '../types';
 
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -28,10 +28,14 @@ export const supabase = new Proxy({} as SupabaseClient, {
 
 export interface GlobalSettings {
   master_code: string;
+  emergency_pin: string;
   override_cutoff: boolean;
   manager_phone?: string;
   active_days: string[]; 
   cutoff_time: string;
+  pdf_title?: string;
+  pdf_show_summary?: boolean;
+  pdf_show_list?: boolean;
 }
 
 export interface Passkey {
@@ -147,20 +151,28 @@ class DB {
   async getSettings(): Promise<GlobalSettings> {
     const defaults: GlobalSettings = { 
       master_code: 'PIZZA2025', 
+      emergency_pin: '0000',
       override_cutoff: false, 
       manager_phone: '', 
       active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
-      cutoff_time: '16:30'
+      cutoff_time: '16:30',
+      pdf_title: 'IN TAVOLA - PIZZA STAFF',
+      pdf_show_summary: true,
+      pdf_show_list: true
     };
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
       if (error || !data) return defaults;
       return {
         master_code: data.master_code || defaults.master_code,
+        emergency_pin: data.emergency_pin || defaults.emergency_pin,
         override_cutoff: !!data.override_cutoff,
         manager_phone: data.manager_phone || '',
         active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days,
-        cutoff_time: data.cutoff_time || defaults.cutoff_time
+        cutoff_time: data.cutoff_time || defaults.cutoff_time,
+        pdf_title: data.pdf_title || defaults.pdf_title,
+        pdf_show_summary: data.pdf_show_summary !== undefined ? !!data.pdf_show_summary : defaults.pdf_show_summary,
+        pdf_show_list: data.pdf_show_list !== undefined ? !!data.pdf_show_list : defaults.pdf_show_list
       };
     } catch (err: any) {
       return defaults;
@@ -168,13 +180,26 @@ class DB {
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
-    if (error) {
-      console.error("Errore Supabase updateSettings:", error);
-      if (error.message?.includes("cutoff_time")) {
-        throw new Error("Colonna 'cutoff_time' mancante nella tabella 'settings'.");
+    try {
+      const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
+      if (error) {
+        console.error("Errore Supabase updateSettings:", error);
+        
+        // Gestione specifica errori di schema
+        if (error.message?.includes("cutoff_time")) {
+          throw new Error("Colonna 'cutoff_time' mancante nella tabella 'settings'.");
+        }
+        if (error.message?.includes("emergency_pin")) {
+          throw new Error("SCHEMA_ERROR: Manca la colonna 'emergency_pin' nella tabella 'settings'. Esegui l'ALTER TABLE in Supabase.");
+        }
+        if (error.message?.includes("pdf_title")) {
+          throw new Error("SCHEMA_ERROR: Mancano le colonne PDF nella tabella 'settings'. Esegui l'ALTER TABLE in Supabase.");
+        }
+        
+        await this.handleError(error, "Salvataggio impostazioni");
       }
-      await this.handleError(error, "Salvataggio impostazioni");
+    } catch (err) {
+      await this.handleError(err, "Aggiornamento impostazioni");
     }
   }
 
@@ -204,20 +229,26 @@ class DB {
   }
 
   async getUserByPin(pin: string): Promise<User | null> {
-    // Fallback Admin per emergenza o primo accesso
-    if (pin === '0000') {
-      return {
-        id: 'admin-fallback',
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        phone_e164: '',
-        pin: '0000',
-        role: Role.ADMIN,
-        active: true
-      };
-    }
-
     try {
+      // 1. Recupera le impostazioni per controllare il PIN Master dinamico
+      const settings = await this.getSettings();
+      
+      // Se emergency_pin non è presente o è nullo (es. fallback), usiamo '0000'
+      const masterPin = settings.emergency_pin || '0000';
+      
+      if (pin === masterPin) {
+        return {
+          id: '00000000-0000-0000-0000-000000000000',
+          firstName: 'Admin',
+          lastName: 'Sistema',
+          phone_e164: '',
+          pin: masterPin,
+          role: Role.ADMIN,
+          active: true
+        };
+      }
+
+      // 2. Altrimenti cerca tra gli utenti standard
       const { data, error } = await supabase.from('users').select('*').eq('pin', pin).eq('active', true).maybeSingle();
       if (error) throw error;
       if (!data) return null;
@@ -250,8 +281,21 @@ class DB {
   }
 
   async deleteUser(id: string): Promise<void> {
-    const { error } = await supabase.from('users').delete().eq('id', id);
-    if (error) await this.handleError(error, "Cancellazione utente");
+    try {
+      // 1. Elimina le passkey associate (WebAuthn)
+      await supabase.from('passkeys').delete().eq('user_id', id);
+      
+      // 2. Elimina gli ordini associati
+      // Nota: In un sistema reale potresti voler conservare gli ordini rendendo user_id NULL,
+      // ma se il cliente chiede l'eliminazione completa procediamo a pulire.
+      await supabase.from('orders').delete().eq('user_id', id);
+
+      // 3. Elimina l'utente
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      await this.handleError(err, "Cancellazione completa utente");
+    }
   }
 
   async getPizzas(): Promise<Pizza[]> {
@@ -302,6 +346,27 @@ class DB {
     if (error) await this.handleError(error, "Cancellazione variante");
   }
 
+  async getPizzaFlags(): Promise<PizzaFlag[]> {
+    const { data, error } = await supabase.from('pizza_flags').select('*').order('sort_order', { ascending: true });
+    if (error) return [];
+    return (data || []).map(f => ({
+      id: f.id, name: f.name, active: f.active, sort_order: f.sort_order
+    }));
+  }
+
+  async savePizzaFlag(flag: Partial<PizzaFlag>): Promise<void> {
+    const payload = { name: flag.name, active: flag.active !== false, sort_order: flag.sort_order || 0 };
+    const { error } = flag.id
+      ? await supabase.from('pizza_flags').update(payload).eq('id', flag.id)
+      : await supabase.from('pizza_flags').insert([payload]);
+    if (error) await this.handleError(error, "Salvataggio flag");
+  }
+
+  async deletePizzaFlag(id: string): Promise<void> {
+    const { error } = await supabase.from('pizza_flags').delete().eq('id', id);
+    if (error) await this.handleError(error, "Cancellazione flag");
+  }
+
   async getDays(): Promise<Day[]> {
     const { data, error } = await supabase.from('days').select('*').order('date', { ascending: false });
     if (error) return [];
@@ -345,6 +410,7 @@ class DB {
       id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
+      flagIds: Array.isArray(o.flag_ids) ? o.flag_ids : [],
       note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
     }));
   }
@@ -356,6 +422,7 @@ class DB {
       id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
+      flagIds: Array.isArray(o.flag_ids) ? o.flag_ids : [],
       note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
     }));
   }
@@ -368,6 +435,7 @@ class DB {
       id: data.id, dayId: data.day_id, userId: data.user_id, pizzaId: data.pizza_id, slotTime: data.slot_time as SlotTime,
       addModificationIds: Array.isArray(data.add_modification_ids) ? data.add_modification_ids : [],
       removeModificationIds: Array.isArray(data.remove_modification_ids) ? data.remove_modification_ids : [],
+      flagIds: Array.isArray(data.flag_ids) ? data.flag_ids : [],
       note: data.note || '', createdAt: data.created_at, updatedAt: data.updated_at 
     };
   }
@@ -383,6 +451,7 @@ class DB {
     const payload = { 
       day_id: dayId, user_id: order.userId, pizza_id: order.pizzaId, slot_time: order.slotTime, 
       add_modification_ids: order.addModificationIds || [], remove_modification_ids: order.removeModificationIds || [],
+      flag_ids: order.flagIds || [],
       note: order.note || '', updated_at: new Date().toISOString() 
     };
     const { error } = await supabase.from('orders').upsert(payload, { onConflict: 'day_id,user_id' });

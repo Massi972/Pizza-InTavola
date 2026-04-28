@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Pizza, Order, SlotTime, Modification, Role, DayOverride } from '../types';
+import { User, Pizza, PizzaFlag, Order, SlotTime, Modification, Role, DayOverride } from '../types';
 import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, SegmentedControl, Input } from '../components/UI';
@@ -15,7 +15,8 @@ import {
   UserIcon,
   LogOut,
   Sliders,
-  Fingerprint
+  Fingerprint,
+  Flag
 } from '../components/Icons';
 import { getDayAvailability, getTodayDateString } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
@@ -33,6 +34,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [activeTab, setActiveTab] = useState<ViewState>('menu');
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [modifications, setModifications] = useState<Modification[]>([]);
+  const [pizzaFlags, setPizzaFlags] = useState<PizzaFlag[]>([]);
   const [currentDay, setCurrentDay] = useState<any>(null);
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [overrides, setOverrides] = useState<DayOverride[]>([]);
@@ -42,6 +44,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [slot, setSlot] = useState<SlotTime>('18:00');
   const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
   const [selectedRemoveIds, setSelectedRemoveIds] = useState<string[]>([]);
+  const [selectedFlagIds, setSelectedFlagIds] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -105,12 +108,17 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     });
   };
 
+  const handleToggleFlag = (id: string) => {
+    setSelectedFlagIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [pizzaList, modList, day, order, globalSettings, dayOverrides] = await Promise.all([
+      const [pizzaList, modList, flagList, day, order, globalSettings, dayOverrides] = await Promise.all([
         db.getPizzas(),
         db.getModifications(),
+        db.getPizzaFlags(),
         db.getCurrentDay(),
         db.getUserOrderToday(user.id),
         db.getSettings(),
@@ -118,6 +126,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       ]);
       setPizzas(pizzaList.filter(p => p.active));
       setModifications(modList || []);
+      setPizzaFlags(flagList.filter(f => f.active) || []);
       setCurrentDay(day);
       setMyOrder(order);
       setSettings(globalSettings);
@@ -149,6 +158,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         slotTime: slot,
         addModificationIds: selectedAddIds,
         removeModificationIds: selectedRemoveIds,
+        flagIds: selectedFlagIds,
         note: ''
       };
 
@@ -246,6 +256,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                     const mod = modifications.find(m => m.id === id);
                     return mod ? <span key={id} className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-700">-{mod.name}</span> : null;
                   })}
+                  {myOrder.flagIds?.map(id => {
+                    const flag = pizzaFlags.find(f => f.id === id);
+                    return flag ? <span key={id} className="text-[9px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{flag.name}</span> : null;
+                  })}
                 </div>
               </div>
               <div className="bg-[#F2F2F7] px-3 py-1.5 rounded-xl flex items-center gap-1.5">
@@ -261,6 +275,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   setSlot(myOrder.slotTime); 
                   setSelectedAddIds(myOrder.addModificationIds || []); 
                   setSelectedRemoveIds(myOrder.removeModificationIds || []); 
+                  setSelectedFlagIds(myOrder.flagIds || []);
                   setIsEditing(true); 
                 }
               }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">Cambia Scelta</Button>
@@ -472,6 +487,19 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                     })}
                   </div>
                 </section>
+                {pizzaFlags.length > 0 && (
+                  <section className="space-y-2">
+                    <p className="text-[9px] font-black text-[#5856D6] uppercase tracking-widest pl-1">Opzioni Speciali (Extra)</p>
+                    <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                      {pizzaFlags.map(flag => (
+                        <button key={flag.id} onClick={() => handleToggleFlag(flag.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors text-indigo-700">
+                          <span className="text-xs font-bold">{flag.name}</span>
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedFlagIds.includes(flag.id) ? 'bg-[#5856D6] border-[#5856D6]' : 'border-[#C6C6C8]'}`}>{selectedFlagIds.includes(flag.id) && <Check size={12} className="text-white" strokeWidth={3} />}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
               
               <div className="pt-2 flex flex-col gap-2">
@@ -520,6 +548,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                     {selectedRemoveIds.map(id => {
                       const m = modifications.find(mod => mod.id === id);
                       return m ? <span key={id} className="text-[8px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">-{m.name}</span> : null;
+                    })}
+                    {selectedFlagIds.map(id => {
+                      const f = pizzaFlags.find(flag => flag.id === id);
+                      return f ? <span key={id} className="text-[8px] font-black bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">{f.name}</span> : null;
                     })}
                   </div>
                 </div>

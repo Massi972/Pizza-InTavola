@@ -61,10 +61,14 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       // Pulisco l'oggetto per assicurarmi di inviare solo i campi previsti dal database
       const cleanPayload = {
         master_code: updatedSettings.master_code,
+        emergency_pin: updatedSettings.emergency_pin,
         cutoff_time: updatedSettings.cutoff_time,
         active_days: updatedSettings.active_days,
         override_cutoff: updatedSettings.override_cutoff,
-        manager_phone: updatedSettings.manager_phone
+        manager_phone: updatedSettings.manager_phone,
+        pdf_title: updatedSettings.pdf_title,
+        pdf_show_summary: updatedSettings.pdf_show_summary,
+        pdf_show_list: updatedSettings.pdf_show_list
       };
       
       await db.updateSettings(cleanPayload);
@@ -136,6 +140,30 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
+  const handleMasterCodeChange = (val: string) => {
+    if (!settings) return;
+    const updated = { ...settings, master_code: val.toUpperCase() };
+    setSettings(updated);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
+  };
+
+  const handleEmergencyPinChange = (val: string) => {
+    if (!settings) return;
+    const updated = { ...settings, emergency_pin: val };
+    setSettings(updated);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
+  };
+
+  const handlePdfSettingChange = (key: keyof GlobalSettings, val: any) => {
+    if (!settings) return;
+    const updated = { ...settings, [key]: val };
+    setSettings(updated);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
+  };
+
   const getNextTwoWeeks = () => {
     const days = [];
     const now = new Date();
@@ -176,12 +204,102 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <div className="p-3 bg-white/50 rounded-lg border border-red-200 text-[#FF3B30]">
                 <p className="text-[9px] font-black uppercase mb-1">Esegui questo SQL in Supabase:</p>
                 <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
-{`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';`}
+{`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS emergency_pin TEXT DEFAULT '0000';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_title TEXT DEFAULT 'IN TAVOLA - PIZZA STAFF';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_summary BOOLEAN DEFAULT true;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true;`}
                 </code>
               </div>
             )}
           </div>
         )}
+
+        {/* Sicurezza e Accesso */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Check size={18} className="text-[#5856D6]" />
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Sicurezza e Accesso</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <Card className="p-4 bg-white border-l-4 border-[#007AFF]">
+              <div className="flex justify-between items-center mb-1">
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">Codice Locale (Bacheca)</p>
+                {isSaving && !savingId && <div className="loading-spinner !w-3 !h-3" />}
+              </div>
+              <Input 
+                value={settings?.master_code || ''} 
+                onChange={(e) => handleMasterCodeChange(e.target.value)}
+                placeholder="ES: PIZZA2025"
+                className="font-mono font-black text-xl text-[#007AFF] uppercase tracking-widest border-none bg-[#F2F2F7] rounded-xl"
+              />
+              <p className="text-[8px] text-[#8E8E93] font-bold uppercase mt-2 italic px-1">Il codice che i dipendenti leggono in bacheca per accedere</p>
+            </Card>
+
+            <Card className="p-4 bg-white border-l-4 border-[#FF3B30]">
+              <div className="flex justify-between items-center mb-1">
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">PIN Master di Emergenza</p>
+                {isSaving && !savingId && <div className="loading-spinner !w-3 !h-3" />}
+              </div>
+              <Input 
+                type="text" 
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={settings?.emergency_pin || ''} 
+                onChange={(e) => handleEmergencyPinChange(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="4 Cifre"
+                className="font-mono font-black text-xl text-[#FF3B30] tracking-widest border-none bg-[#F2F2F7] rounded-xl"
+              />
+              <p className="text-[8px] text-[#8E8E93] font-bold uppercase mt-2 italic px-1">PIN Segreto per l'amministratore (Ex 0000)</p>
+            </Card>
+          </div>
+        </section>
+
+        {/* Impostazioni PDF */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <RotateCcw size={18} className="text-[#34C759]" />
+            <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Personalizzazione Stampa PDF</p>
+          </div>
+          <Card className="p-4 bg-white border-l-4 border-[#34C759]">
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter mb-1">Titolo Intestazione</p>
+                <Input 
+                  value={settings?.pdf_title || ''} 
+                  onChange={(e) => handlePdfSettingChange('pdf_title', e.target.value)}
+                  placeholder="ES: IN TAVOLA - PIZZA STAFF"
+                  className="font-bold text-[#34C759] border-none bg-[#F2F2F7] rounded-xl"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-[#1c1c1e]">Tabella Riepilogo</p>
+                  <p className="text-[9px] text-[#8E8E93] font-bold uppercase">Mostra tabella Quantità/Pizza</p>
+                </div>
+                <button 
+                  onClick={() => handlePdfSettingChange('pdf_show_summary', !settings?.pdf_show_summary)}
+                  className={`w-10 h-6 rounded-full transition-colors relative ${settings?.pdf_show_summary ? 'bg-[#34C759]' : 'bg-gray-200'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings?.pdf_show_summary ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-[#1c1c1e]">Elenco Nomi</p>
+                  <p className="text-[9px] text-[#8E8E93] font-bold uppercase">Mostra elenco dipendenti e pizze</p>
+                </div>
+                <button 
+                  onClick={() => handlePdfSettingChange('pdf_show_list', !settings?.pdf_show_list)}
+                  className={`w-10 h-6 rounded-full transition-colors relative ${settings?.pdf_show_list ? 'bg-[#34C759]' : 'bg-gray-200'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings?.pdf_show_list ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+            </div>
+          </Card>
+        </section>
 
         {/* Orario Cutoff */}
         <section className="space-y-3">

@@ -118,6 +118,27 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
     window.open(whatsappUrl, '_blank');
   };
 
+  const handleDelete = async (user: User) => {
+    if (user.id === currentUser?.id) {
+      alert("Operazione non consentita: non puoi eliminare il tuo stesso account amministratore.");
+      return;
+    }
+
+    if (window.confirm(`Sei sicuro di voler eliminare definitivamente ${user.firstName} ${user.lastName}? Questa operazione non può essere annullata.`)) {
+      try {
+        setLoading(true);
+        await db.deleteUser(user.id);
+        showToast("Utente eliminato ✅");
+        await fetchUsers();
+      } catch (err: any) {
+        console.error("Errore eliminazione utente:", err);
+        alert(`Errore: ${err.message || "Impossibile eliminare l'utente"}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.phone_e164) {
       setError('Tutti i campi (Nome, Cognome, Telefono e PIN) sono obbligatori');
@@ -195,7 +216,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
                       <button onClick={() => { setEditing(u); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => { if(window.confirm(`Eliminare ${u.firstName}?`)) db.deleteUser(u.id).then(fetchUsers) }} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
+                      <button onClick={() => handleDelete(u)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
                         <Trash2 size={16} />
                       </button>
                     </div>

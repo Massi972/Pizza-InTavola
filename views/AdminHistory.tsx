@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Day, Order, Modification, User, Pizza } from '../types';
+import { Day, Order, Modification, PizzaFlag, User, Pizza } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button } from '../components/UI';
@@ -18,6 +18,7 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [dayOrders, setDayOrders] = useState<any[]>([]);
   const [modifications, setModifications] = useState<Modification[]>([]);
+  const [pizzaFlags, setPizzaFlags] = useState<PizzaFlag[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   
@@ -29,15 +30,17 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [dayList, modList, orderList, userList, pizzaList] = await Promise.all([
+        const [dayList, modList, flagList, orderList, userList, pizzaList] = await Promise.all([
           db.getDays(),
           db.getModifications(),
+          db.getPizzaFlags(),
           db.getAllOrders(),
           db.getUsers(),
           db.getPizzas()
         ]);
         setDays(dayList);
         setModifications(modList);
+        setPizzaFlags(flagList);
         setAllOrders(orderList);
         setUsers(userList);
         setPizzas(pizzaList);
@@ -60,7 +63,8 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
         user: users.find(u => u.id === o.userId),
         pizza: pizzas.find(p => p.id === o.pizzaId),
         addMods: (o.addModificationIds || []).map((id: string) => modifications.find(m => m.id === id)).filter(Boolean),
-        removeMods: (o.removeModificationIds || []).map((id: string) => modifications.find(m => m.id === id)).filter(Boolean)
+        removeMods: (o.removeModificationIds || []).map((id: string) => modifications.find(m => m.id === id)).filter(Boolean),
+        flags: (o.flagIds || []).map((id: string) => pizzaFlags.find(f => f.id === id)).filter(Boolean)
       })));
     } catch (err) {
       console.error(err);
@@ -78,7 +82,8 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
         user: users.find(u => u.id === o.userId),
         pizza: pizzas.find(p => p.id === o.pizzaId),
         addMods: (o.addModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[],
-        removeMods: (o.removeModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[]
+        removeMods: (o.removeModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[],
+        flags: (o.flagIds || []).map(id => pizzaFlags.find(f => f.id === id)).filter(Boolean) as PizzaFlag[]
       };
     });
   };
@@ -236,6 +241,9 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
                            ))}
                            {o.removeMods?.map((m: Modification) => (
                              <span key={m.id} className="text-[8px] font-black text-red-500 bg-red-50 px-1 rounded">-{m.name}</span>
+                           ))}
+                           {o.flags?.map((f: PizzaFlag) => (
+                             <span key={f.id} className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-1 rounded">{f.name}</span>
                            ))}
                          </div>
                       </div>

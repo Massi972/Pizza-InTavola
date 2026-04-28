@@ -30,7 +30,8 @@ import {
   Settings,
   User as UserIcon,
   Sliders,
-  Filter
+  Filter,
+  Flag
 } from 'lucide-react';
 
 export {
@@ -63,5 +64,6 @@ export {
   Settings,
   UserIcon,
   Sliders,
-  Filter
+  Filter,
+  Flag
 };

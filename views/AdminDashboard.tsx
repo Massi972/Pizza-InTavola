@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, Day, DayStatus, SlotTime, Role, Modification, DayOverride } from '../types';
+import { User, Day, DayStatus, SlotTime, Role, Modification, PizzaFlag, DayOverride } from '../types';
 import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
@@ -17,7 +17,8 @@ import {
   RotateCcw,
   X,
   Check,
-  ClockIcon
+  ClockIcon,
+  Flag
 } from '../components/Icons';
 import { formatDate, getDayAvailability, getTodayDateString } from '../services/utils';
 import { generateDayReportPDF, HydratedOrder } from '../services/exportService';
@@ -26,7 +27,7 @@ import { SLOT_TIMES } from '../constants';
 interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
-  onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications' | 'calendar') => void;
+  onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications' | 'calendar' | 'flags') => void;
   onGoToOrder: () => void;
 }
 
@@ -60,11 +61,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       setOverrides(dayOverrides);
       
       if (day) {
-        const [dayOrders, users, pizzas, modifications] = await Promise.all([
+        const [dayOrders, users, pizzas, modifications, pizzaFlags] = await Promise.all([
           db.getOrdersByDay(day.id),
           db.getUsers(),
           db.getPizzas(),
-          db.getModifications()
+          db.getModifications(),
+          db.getPizzaFlags()
         ]);
 
         const hydratedOrders: HydratedOrder[] = dayOrders.map(o => ({
@@ -72,7 +74,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
           user: users.find(u => u.id === o.userId),
           pizza: pizzas.find(p => p.id === o.pizzaId),
           addMods: (o.addModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[],
-          removeMods: (o.removeModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[]
+          removeMods: (o.removeModificationIds || []).map(id => modifications.find(m => m.id === id)).filter(Boolean) as Modification[],
+          flags: (o.flagIds || []).map(id => pizzaFlags.find(f => f.id === id)).filter(Boolean) as PizzaFlag[]
         }));
         
         setOrders(hydratedOrders);
@@ -162,7 +165,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       alert("Nessun ordine presente per oggi.");
       return;
     }
-    generateDayReportPDF(currentDay.date, orders, SLOT_TIMES);
+    generateDayReportPDF(currentDay.date, orders, SLOT_TIMES, settings || undefined);
   };
 
   const isAdmin = user.role === Role.ADMIN;
@@ -209,12 +212,12 @@ DECLARE
     r RECORD;
 BEGIN
     -- Rimuove le viste se esistono
-    FOR r IN (SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname IN ('settings', 'users', 'pizzas', 'modifications', 'days', 'day_overrides', 'orders')) LOOP
+    FOR r IN (SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname IN ('settings', 'users', 'pizzas', 'modifications', 'pizza_flags', 'days', 'day_overrides', 'orders')) LOOP
         EXECUTE 'DROP VIEW IF EXISTS ' || quote_ident(r.viewname) || ' CASCADE';
     END LOOP;
     
     -- Rimuove le tabelle se esistono
-    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('settings', 'users', 'pizzas', 'modifications', 'days', 'day_overrides', 'orders')) LOOP
+    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('settings', 'users', 'pizzas', 'modifications', 'pizza_flags', 'days', 'day_overrides', 'orders')) LOOP
         EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
     END LOOP;
 END $$;
@@ -262,6 +265,14 @@ CREATE TABLE modifications (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE pizza_flags (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  active BOOLEAN DEFAULT true,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE days (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE UNIQUE NOT NULL,
@@ -286,6 +297,7 @@ CREATE TABLE orders (
   slot_time TEXT NOT NULL,
   add_modification_ids UUID[],
   remove_modification_ids UUID[],
+  flag_ids UUID[],
   note TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
@@ -301,6 +313,7 @@ ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE pizzas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE modifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pizza_flags DISABLE ROW LEVEL SECURITY;
 ALTER TABLE days DISABLE ROW LEVEL SECURITY;
 ALTER TABLE day_overrides DISABLE ROW LEVEL SECURITY;
 ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
@@ -388,6 +401,7 @@ ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
             <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border border-[#C6C6C8]/30"><PizzaIcon size={18} /> Lista Pizze Menu</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Sliders size={18} /> Lista Varianti</Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('flags')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Flag size={18} className="text-[#5856D6]" /> Lista Flag (Etichette)</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border border-[#C6C6C8]/30"><UsersIcon size={18} /> Lista Dipendenti</Button>
             <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30"><History size={18} /> Archivio Storico</Button>
           </div>
