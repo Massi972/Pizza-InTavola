@@ -10,7 +10,6 @@ import AdminHistory from './views/AdminHistory';
 import AdminModifications from './views/AdminModifications';
 import AdminCalendar from './views/AdminCalendar';
 import AdminFlags from './views/AdminFlags';
-import { Fingerprint } from './components/Icons';
 import { Button } from './components/UI';
 
 // Soglia zero: sicurezza massima, nessun tempo di tolleranza.
@@ -24,8 +23,6 @@ const App: React.FC = () => {
   });
 
   const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags'>('dashboard');
-  const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false);
-  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
@@ -61,29 +58,10 @@ const App: React.FC = () => {
     if (auth.isAuthenticated) {
       sessionStorage.setItem('pizzastaff_auth', JSON.stringify(auth));
     }
-    
-    const checkSupport = async () => {
-      const supported = !!(window.PublicKeyCredential && 
-        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
-      setIsBiometricSupported(supported);
-    };
-    checkSupport();
   }, [auth]);
 
   const handleLogin = (user: User) => {
     setAuth({ user, isAuthenticated: true });
-    
-    const passkeyActive = localStorage.getItem('pizzastaff_passkey_active') === 'true';
-    const hasDeclined = localStorage.getItem('pizzastaff_passkey_declined') === 'true';
-
-    if (!passkeyActive && !hasDeclined && isBiometricSupported) {
-      setTimeout(() => setShowPasskeyPrompt(true), 1500);
-    }
-  };
-
-  const declinePasskey = () => {
-    localStorage.setItem('pizzastaff_passkey_declined', 'true');
-    setShowPasskeyPrompt(false);
   };
 
   if (!auth.isAuthenticated || !auth.user) {
@@ -112,32 +90,6 @@ const App: React.FC = () => {
           <WorkerDashboard user={auth.user} onLogout={handleLogout} />
         )}
       </div>
-
-      {showPasskeyPrompt && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={declinePasskey} />
-          <div className="relative bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in slide-in-from-bottom duration-500 text-center space-y-6">
-            <div className="w-20 h-20 bg-[#F2F2F7] text-[#007AFF] rounded-full flex items-center justify-center mx-auto">
-              <Fingerprint size={40} />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-[#1c1c1e]">Accesso Biometrico</h3>
-              <p className="text-sm text-[#8E8E93] mt-2 leading-relaxed">
-                Vuoi attivare il Face ID o l'impronta digitale? Potrai entrare istantaneamente senza PIN la prossima volta.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <Button fullWidth onClick={() => { setShowPasskeyPrompt(false); setView('order'); }}>Configura nel profilo</Button>
-              <button 
-                onClick={declinePasskey}
-                className="w-full py-2 text-sm font-bold text-[#8E8E93] uppercase tracking-widest"
-              >
-                No, grazie
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

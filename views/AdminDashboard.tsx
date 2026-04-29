@@ -169,6 +169,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
   };
 
   const isAdmin = user.role === Role.ADMIN;
+  const isSupervisorOrAdmin = user.role === Role.ADMIN || user.role === Role.SUPERVISOR;
 
   if (loading && !error) {
     return (
@@ -202,15 +203,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
               <button onClick={() => setError(null)} className="p-1"><X size={16} /></button>
             </div>
             
-            {(error.message.includes('pizzas') || error.message.includes('settings') || error.message.includes('users') || error.message.includes('orders')) && (
+            {isAdmin && (error.message.includes('pizzas') || error.message.includes('settings') || error.message.includes('users') || error.message.includes('orders')) && (
               <div className="p-3 bg-white/50 rounded-lg border border-red-200">
                 <p className="text-[10px] font-bold uppercase text-red-800 mb-1">Copia ed esegui in Supabase SQL Editor per creare le tabelle:</p>
                 <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
 {`-- 1. Pulizia totale (rimuove sia tabelle che viste esistenti in modo sicuro)
 DO $$ 
-DECLARE
+ DECLARE
     r RECORD;
-BEGIN
+ BEGIN
     -- Rimuove le viste se esistono
     FOR r IN (SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname IN ('settings', 'users', 'pizzas', 'modifications', 'pizza_flags', 'days', 'day_overrides', 'orders')) LOOP
         EXECUTE 'DROP VIEW IF EXISTS ' || quote_ident(r.viewname) || ' CASCADE';
@@ -220,20 +221,20 @@ BEGIN
     FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('settings', 'users', 'pizzas', 'modifications', 'pizza_flags', 'days', 'day_overrides', 'orders')) LOOP
         EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
     END LOOP;
-END $$;
-
--- 2. Creazione tabelle reali
-CREATE TABLE settings (
+ END $$;
+ 
+ -- 2. Creazione tabelle reali
+ CREATE TABLE settings (
   id TEXT PRIMARY KEY DEFAULT 'global',
   master_code TEXT DEFAULT 'PIZZA2025',
   override_cutoff BOOLEAN DEFAULT false,
   manager_phone TEXT,
   active_days TEXT[] DEFAULT ARRAY['MON', 'TUE', 'WED', 'THU', 'FRI'],
   cutoff_time TEXT DEFAULT '16:30'
-);
-INSERT INTO settings (id) VALUES ('global');
-
-CREATE TABLE users (
+ );
+ INSERT INTO settings (id) VALUES ('global');
+ 
+ CREATE TABLE users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
@@ -243,9 +244,9 @@ CREATE TABLE users (
   role TEXT NOT NULL,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE pizzas (
+ );
+ 
+ CREATE TABLE pizzas (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -254,42 +255,42 @@ CREATE TABLE pizzas (
   active BOOLEAN DEFAULT true,
   is_vegetarian BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE modifications (
+ );
+ 
+ CREATE TABLE modifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT CHECK (type IN ('ADD', 'REMOVE')),
   active BOOLEAN DEFAULT true,
   sort_order INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE pizza_flags (
+ );
+ 
+ CREATE TABLE pizza_flags (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   active BOOLEAN DEFAULT true,
   sort_order INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE days (
+ );
+ 
+ CREATE TABLE days (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE UNIQUE NOT NULL,
   status TEXT NOT NULL,
   opened_at TIMESTAMPTZ,
   closed_at TIMESTAMPTZ
-);
-
-CREATE TABLE day_overrides (
+ );
+ 
+ CREATE TABLE day_overrides (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE UNIQUE NOT NULL,
   type TEXT NOT NULL,
   note TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE orders (
+ );
+ 
+ CREATE TABLE orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   day_id UUID REFERENCES days(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -302,21 +303,21 @@ CREATE TABLE orders (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(day_id, user_id)
-);
-
--- 3. Inserisci Admin iniziale (PIN: 1234)
-INSERT INTO users (first_name, last_name, pin, role) 
-VALUES ('Admin', 'Principale', '1234', 'ADMIN');
-
--- 4. Disabilita RLS
-ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE pizzas DISABLE ROW LEVEL SECURITY;
-ALTER TABLE modifications DISABLE ROW LEVEL SECURITY;
-ALTER TABLE pizza_flags DISABLE ROW LEVEL SECURITY;
-ALTER TABLE days DISABLE ROW LEVEL SECURITY;
-ALTER TABLE day_overrides DISABLE ROW LEVEL SECURITY;
-ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
+ );
+ 
+ -- 3. Inserisci Admin iniziale (PIN: 1234)
+ INSERT INTO users (first_name, last_name, pin, role) 
+ VALUES ('Admin', 'Principale', '1234', 'ADMIN');
+ 
+ -- 4. Disabilita RLS
+ ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE pizzas DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE modifications DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE pizza_flags DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE days DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE day_overrides DISABLE ROW LEVEL SECURITY;
+ ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
                 </code>
               </div>
             )}
@@ -394,16 +395,40 @@ ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
           </Button>
         )}
 
-        {/* Menu Amministratore */}
-        {isAdmin && (
+        {/* Menu Amministratore / Supervisor */}
+        {isSupervisorOrAdmin && (
           <div className="space-y-2 pt-4 border-t border-[#C6C6C8]">
             <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Configurazione Gestionale</p>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border border-[#C6C6C8]/30"><PizzaIcon size={18} /> Lista Pizze Menu</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Sliders size={18} /> Lista Varianti</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('flags')} className="justify-start !bg-white border border-[#C6C6C8]/30"><Flag size={18} className="text-[#5856D6]" /> Lista Flag (Etichette)</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border border-[#C6C6C8]/30"><UsersIcon size={18} /> Lista Dipendenti</Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30"><History size={18} /> Archivio Storico</Button>
+            
+            {/* Solo per Admin */}
+            {isAdmin && (
+              <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+                <Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari
+              </Button>
+            )}
+
+            {/* Per Admin e Supervisor */}
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+              <PizzaIcon size={18} /> Lista Pizze Menu
+            </Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+              <Sliders size={18} /> Lista Varianti
+            </Button>
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('flags')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+              <Flag size={18} className="text-[#5856D6]" /> Lista Flag (Etichette)
+            </Button>
+
+            {/* Solo per Admin */}
+            {isAdmin && (
+              <>
+                <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+                  <UsersIcon size={18} /> Lista Dipendenti
+                </Button>
+                <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+                  <History size={18} /> Archivio Storico
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
