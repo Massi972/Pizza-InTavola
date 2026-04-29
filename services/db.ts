@@ -27,7 +27,6 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 export interface GlobalSettings {
-  master_code: string;
   emergency_pin: string;
   override_cutoff: boolean;
   manager_phone?: string;
@@ -38,16 +37,6 @@ export interface GlobalSettings {
   pdf_show_list?: boolean;
 }
 
-export interface Passkey {
-  id: string;
-  user_id: string;
-  credential_id: string;
-  public_key: string;
-  counter: number;
-  transports: string[];
-  created_at: string;
-}
-
 class DB {
   private async handleError(error: any, context: string) {
     console.error(`Dettaglio Errore [${context}]:`, error);
@@ -55,102 +44,10 @@ class DB {
     throw new Error(`${context}: ${msg}`);
   }
 
-  // --- WEBAUTHN SIMULATED ENDPOINTS ---
-
-  async getWebAuthnRegisterOptions(userId: string) {
-    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
-    if (!user) throw new Error("Utente non trovato");
-
-    // In un sistema reale, la challenge verrebbe salvata in sessione server-side
-    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
-    const challengeBase64 = btoa(String.fromCharCode(...challenge));
-    localStorage.setItem('webauthn_challenge', challengeBase64);
-
-    return {
-      challenge: challengeBase64,
-      rp: { name: "Pizza InTavola", id: window.location.hostname },
-      user: {
-        id: btoa(user.id),
-        name: user.first_name + ' ' + user.last_name,
-        displayName: user.first_name,
-      },
-      pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-      timeout: 60000,
-      attestation: "none",
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        userVerification: "required",
-        residentKey: "preferred",
-      }
-    };
-  }
-
-  async verifyWebAuthnRegister(userId: string, credential: any) {
-    // Simulazione verifica lato server dell'attestazione
-    const { error } = await supabase.from('passkeys').insert({
-      user_id: userId,
-      credential_id: credential.id,
-      public_key: "MOCKED_PUBLIC_KEY", // In produzione: estrarre da credential.response.attestationObject
-      counter: 0,
-      transports: credential.response.transports || ['internal']
-    });
-
-    if (error) throw error;
-    return { success: true };
-  }
-
-  async getWebAuthnLoginOptions() {
-    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
-    const challengeBase64 = btoa(String.fromCharCode(...challenge));
-    localStorage.setItem('webauthn_challenge', challengeBase64);
-
-    return {
-      challenge: challengeBase64,
-      timeout: 60000,
-      userVerification: "required",
-      rpId: window.location.hostname,
-    };
-  }
-
-  async verifyWebAuthnLogin(credential: any) {
-    const { data: passkey, error } = await supabase
-      .from('passkeys')
-      .select('*, users(*)')
-      .eq('credential_id', credential.id)
-      .single();
-
-    if (error || !passkey) throw new Error("Credenziale non riconosciuta");
-
-    // Simulazione verifica firma (assertion)
-    return { 
-      success: true, 
-      user: {
-        id: passkey.users.id,
-        firstName: passkey.users.first_name,
-        lastName: passkey.users.last_name,
-        phone_e164: passkey.users.phone_e164,
-        pin: passkey.users.pin,
-        role: passkey.users.role,
-        active: passkey.users.active
-      } 
-    };
-  }
-
-  async revokePasskeys(userId: string) {
-    const { error } = await supabase.from('passkeys').delete().eq('user_id', userId);
-    if (error) throw error;
-  }
-
-  async hasPasskeys(userId: string): Promise<boolean> {
-    const { count } = await supabase.from('passkeys').select('*', { count: 'exact', head: true }).eq('user_id', userId);
-    return (count || 0) > 0;
-  }
-
   // --- STANDARD DB METHODS ---
 
   async getSettings(): Promise<GlobalSettings> {
     const defaults: GlobalSettings = { 
-      master_code: 'PIZZA2025', 
       emergency_pin: '0000',
       override_cutoff: false, 
       manager_phone: '', 
@@ -164,7 +61,6 @@ class DB {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
       if (error || !data) return defaults;
       return {
-        master_code: data.master_code || defaults.master_code,
         emergency_pin: data.emergency_pin || defaults.emergency_pin,
         override_cutoff: !!data.override_cutoff,
         manager_phone: data.manager_phone || '',
@@ -282,15 +178,12 @@ class DB {
 
   async deleteUser(id: string): Promise<void> {
     try {
-      // 1. Elimina le passkey associate (WebAuthn)
-      await supabase.from('passkeys').delete().eq('user_id', id);
-      
-      // 2. Elimina gli ordini associati
+      // 1. Elimina gli ordini associati
       // Nota: In un sistema reale potresti voler conservare gli ordini rendendo user_id NULL,
       // ma se il cliente chiede l'eliminazione completa procediamo a pulire.
       await supabase.from('orders').delete().eq('user_id', id);
 
-      // 3. Elimina l'utente
+      // 2. Elimina l'utente
       const { error } = await supabase.from('users').delete().eq('id', id);
       if (error) throw error;
     } catch (err) {

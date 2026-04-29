@@ -4,7 +4,7 @@ import { User, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X, AlertCircle, Check, Copy, MessageCircle, RefreshCw } from '../components/Icons';
+import { Plus, Edit2, Trash2, X, AlertCircle, Check, Copy, MessageCircle, RefreshCw, Search } from '../components/Icons';
 
 interface AdminUsersProps {
   onBack: () => void;
@@ -13,6 +13,7 @@ interface AdminUsersProps {
 
 const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
   const [users, setUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [editing, setEditing] = useState<Partial<User> | null>(null);
   const [successUser, setSuccessUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +86,20 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
   };
 
   const getPINMessage = (user: User) => {
-    return `Ciao ${user.firstName}! Sono Luciano di InTavola. Questo è il tuo codice personale per ordinare la pizza: ${user.pin}. Accedi qui: ${window.location.origin}`;
+    return `Ciao ${user.firstName}! Sono Luciano di InTavola.
+Questo è il tuo codice personale per ordinare la pizza: ${user.pin} 
+
+Accedi qui: https://pizza-in-tavola.vercel.app/
+
+Per rendere l’accesso più veloce, ti consiglio di aggiungere l’app alla schermata Home del tuo telefono:
+
+📱 Se hai Android
+Apri il link con Google Chrome → premi i tre puntini in alto a destra → “Aggiungi a schermata Home”
+
+🍎 Se hai iPhone
+Apri il link con Safari → premi il tasto condividi (quello con la freccia in su) → “Aggiungi a Home”
+
+Così avrai l’app sempre a portata di mano 👍`;
   };
 
   const copyToClipboard = async (user: User) => {
@@ -166,6 +180,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
         return;
       }
 
+      // Controllo univocità numero di telefono
+      const phoneExists = users.find(u => u.phone_e164 === editing.phone_e164 && u.id !== editing.id);
+      if (phoneExists) {
+        setError(`Questo numero di telefono è già associato a ${phoneExists.firstName} ${phoneExists.lastName}.`);
+        setSaving(false);
+        return;
+      }
+
       await db.saveUser(editing);
       await fetchUsers();
       
@@ -177,6 +199,11 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
       setSaving(false);
     }
   };
+
+  const filteredUsers = users.filter(u => {
+    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
+    return fullName.includes(searchTerm.toLowerCase());
+  });
 
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
@@ -191,14 +218,36 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
           <Plus size={20} /> Nuovo Dipendente
         </Button>
 
+        <div className="relative">
+          <Input 
+            placeholder="Cerca per nome o cognome..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93]">
+            <Search size={18} />
+          </div>
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-[#8E8E93]/20 rounded-full text-[#8E8E93]"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20"><div className="loading-spinner" /></div>
         ) : (
           <div className="space-y-3">
-            {users.length === 0 ? (
-              <p className="text-center text-[#8E8E93] py-10">Nessun dipendente registrato</p>
+            {filteredUsers.length === 0 ? (
+              <p className="text-center text-[#8E8E93] py-10">
+                {searchTerm ? "Nessun risultato trovato" : "Nessun dipendente registrato"}
+              </p>
             ) : (
-              users.map(u => (
+              filteredUsers.map(u => (
                 <Card key={u.id} className={`p-4 ${!u.active ? 'opacity-50 grayscale' : ''}`}>
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">

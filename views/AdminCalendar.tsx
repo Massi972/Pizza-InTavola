@@ -60,7 +60,6 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     try {
       // Pulisco l'oggetto per assicurarmi di inviare solo i campi previsti dal database
       const cleanPayload = {
-        master_code: updatedSettings.master_code,
         emergency_pin: updatedSettings.emergency_pin,
         cutoff_time: updatedSettings.cutoff_time,
         active_days: updatedSettings.active_days,
@@ -140,14 +139,6 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
-  const handleMasterCodeChange = (val: string) => {
-    if (!settings) return;
-    const updated = { ...settings, master_code: val.toUpperCase() };
-    setSettings(updated);
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
-  };
-
   const handleEmergencyPinChange = (val: string) => {
     if (!settings) return;
     const updated = { ...settings, emergency_pin: val };
@@ -222,20 +213,6 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
             <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Sicurezza e Accesso</p>
           </div>
           <div className="grid grid-cols-1 gap-3">
-            <Card className="p-4 bg-white border-l-4 border-[#007AFF]">
-              <div className="flex justify-between items-center mb-1">
-                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">Codice Locale (Bacheca)</p>
-                {isSaving && !savingId && <div className="loading-spinner !w-3 !h-3" />}
-              </div>
-              <Input 
-                value={settings?.master_code || ''} 
-                onChange={(e) => handleMasterCodeChange(e.target.value)}
-                placeholder="ES: PIZZA2025"
-                className="font-mono font-black text-xl text-[#007AFF] uppercase tracking-widest border-none bg-[#F2F2F7] rounded-xl"
-              />
-              <p className="text-[8px] text-[#8E8E93] font-bold uppercase mt-2 italic px-1">Il codice che i dipendenti leggono in bacheca per accedere</p>
-            </Card>
-
             <Card className="p-4 bg-white border-l-4 border-[#FF3B30]">
               <div className="flex justify-between items-center mb-1">
                 <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">PIN Master di Emergenza</p>
