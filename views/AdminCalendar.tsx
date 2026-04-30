@@ -147,7 +147,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
   };
 
-  const handlePdfSettingChange = (key: keyof GlobalSettings, val: any) => {
+  const handleSettingChange = (key: keyof GlobalSettings, val: any) => {
     if (!settings) return;
     const updated = { ...settings, [key]: val };
     setSettings(updated);
@@ -245,7 +245,7 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
                 <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter mb-1">Titolo Intestazione</p>
                 <Input 
                   value={settings?.pdf_title || ''} 
-                  onChange={(e) => handlePdfSettingChange('pdf_title', e.target.value)}
+                  onChange={(e) => handleSettingChange('pdf_title', e.target.value)}
                   placeholder="ES: IN TAVOLA - PIZZA STAFF"
                   className="font-bold text-[#34C759] border-none bg-[#F2F2F7] rounded-xl"
                 />
@@ -256,7 +256,7 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
                   <p className="text-[9px] text-[#8E8E93] font-bold uppercase">Mostra tabella Quantità/Pizza</p>
                 </div>
                 <button 
-                  onClick={() => handlePdfSettingChange('pdf_show_summary', !settings?.pdf_show_summary)}
+                  onClick={() => handleSettingChange('pdf_show_summary', !settings?.pdf_show_summary)}
                   className={`w-10 h-6 rounded-full transition-colors relative ${settings?.pdf_show_summary ? 'bg-[#34C759]' : 'bg-gray-200'}`}
                 >
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings?.pdf_show_summary ? 'left-5' : 'left-1'}`} />
@@ -268,7 +268,7 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
                   <p className="text-[9px] text-[#8E8E93] font-bold uppercase">Mostra elenco dipendenti e pizze</p>
                 </div>
                 <button 
-                  onClick={() => handlePdfSettingChange('pdf_show_list', !settings?.pdf_show_list)}
+                  onClick={() => handleSettingChange('pdf_show_list', !settings?.pdf_show_list)}
                   className={`w-10 h-6 rounded-full transition-colors relative ${settings?.pdf_show_list ? 'bg-[#34C759]' : 'bg-gray-200'}`}
                 >
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings?.pdf_show_list ? 'left-5' : 'left-1'}`} />
@@ -301,6 +301,21 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
                   <div className="loading-spinner !w-3 !h-3" />
                 </div>
               )}
+            </div>
+          </Card>
+          
+          <Card className="p-4 bg-white border-l-4 border-indigo-500">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-xs font-bold text-[#1c1c1e]">Bypass Orario di Chiusura</p>
+                <p className="text-[9px] text-[#8E8E93] font-bold uppercase">Permetti ordini anche dopo il limite orario</p>
+              </div>
+              <button 
+                onClick={() => handleSettingChange('override_cutoff', !settings?.override_cutoff)}
+                className={`w-10 h-6 rounded-full transition-colors relative ${settings?.override_cutoff ? 'bg-indigo-500' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings?.override_cutoff ? 'left-5' : 'left-1'}`} />
+              </button>
             </div>
           </Card>
         </section>

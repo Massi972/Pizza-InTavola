@@ -42,6 +42,15 @@ export const getDayAvailability = (
   // 1. PRIORITÀ MASSIMA: CONTROLLO MANUALE (ADMIN ACTION)
   if (manualDayRecord && isToday) {
     if (manualDayRecord.status === DayStatus.OPEN) {
+      if (!isBeforeCutoff(cutoffTimeStr)) {
+        return { 
+          isActive: false, 
+          label: `CHIUSO (OLTRE ${cutoffTimeStr})`, 
+          colorClass: 'text-red-500 bg-red-50 font-bold',
+          isToday, 
+          dayName 
+        };
+      }
       return { 
         isActive: true, 
         label: 'APERTO (MANUALE)', 
