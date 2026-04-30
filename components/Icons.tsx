@@ -31,7 +31,13 @@ import {
   User as UserIcon,
   Sliders,
   Filter,
-  Flag
+  Flag,
+  Sun,
+  Moon,
+  Bell,
+  Info,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 
 export {
@@ -65,5 +71,11 @@ export {
   UserIcon,
   Sliders,
   Filter,
-  Flag
+  Flag,
+  Sun,
+  Moon,
+  Bell,
+  Info,
+  AlertTriangle,
+  CheckCircle
 };

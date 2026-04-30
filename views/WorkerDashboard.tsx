@@ -104,7 +104,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       setPizzas(pizzaList.filter(p => p.active));
       setModifications(modList || []);
       setPizzaFlags(flagList.filter(f => f.active) || []);
-      setCurrentDay(day);
+      setCurrentDay(day || null);
       setMyOrder(order);
       setSettings(globalSettings);
       setOverrides(dayOverrides);
@@ -167,7 +167,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     return (
       <div className="space-y-5">
         <div className="pt-2 pb-1">
-          <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
+          <h1 className="text-[28px] font-black text-[#1c1c1e] dark:text-white tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
           <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
         </div>
 
@@ -196,11 +196,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         )}
 
         {myOrder && !selectedPizza && !isEditing && (
-          <Card className={`p-5 border-2 max-w-2xl mx-auto ${availability.isActive ? 'border-[#34C759] shadow-lg' : 'border-[#C6C6C8] opacity-80 grayscale'}`}>
+          <Card className={`p-5 border-2 max-w-2xl mx-auto ${availability.isActive ? 'border-[#34C759] shadow-lg' : 'border-[#C6C6C8] dark:border-[#38383a] opacity-80 grayscale'}`}>
             <div className="flex justify-between items-start gap-3 mb-5">
               <div className="flex-1">
                 <p className={`text-[9px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-[0.2em] mb-1.5`}>Il tuo ordine attuale</p>
-                <h2 className="text-xl font-black truncate">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
+                <h2 className="text-xl font-black truncate text-[#1c1c1e] dark:text-white">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {myOrder.addModificationIds?.map(id => {
                     const mod = modifications.find(m => m.id === id);
@@ -216,9 +216,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   })}
                 </div>
               </div>
-              <div className="bg-[#F2F2F7] px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <div className="bg-[#F2F2F7] dark:bg-[#1c1c1e] px-3 py-1.5 rounded-xl flex items-center gap-1.5">
                 <ClockIcon size={14} className="text-[#8E8E93]" />
-                <span className="text-sm font-black">{myOrder.slotTime}</span>
+                <span className="text-sm font-black text-[#1c1c1e] dark:text-white">{myOrder.slotTime}</span>
               </div>
             </div>
             {canOrder && (
@@ -232,7 +232,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   setSelectedFlagIds(myOrder.flagIds || []);
                   setIsEditing(true); 
                 }
-              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">Cambia Scelta</Button>
+              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] dark:!bg-[#2c2c2e] !py-3">Cambia Scelta</Button>
             )}
           </Card>
         )}
@@ -241,17 +241,17 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <div className={`space-y-5 ${!canOrder ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93]" size={16} />
-              <Input placeholder="Cerca pizza..." className="pl-10 !py-3 !rounded-xl border-none shadow-sm bg-white" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Cerca pizza..." className="pl-10 !py-3 !rounded-xl border-none shadow-sm bg-white dark:bg-[#1c1c1e]" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
               {filteredPizzas.map(pizza => (
-                <Card key={pizza.id} className="p-4 cursor-pointer hover:shadow-md active:scale-[0.97] transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/10" onClick={() => canOrder && setSelectedPizza(pizza)}>
+                <Card key={pizza.id} className="p-4 cursor-pointer hover:shadow-md active:scale-[0.97] transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/10 dark:hover:border-[#007AFF]/20" onClick={() => canOrder && setSelectedPizza(pizza)}>
                   <div className="flex justify-between items-start mb-1.5">
-                    <h3 className="font-black text-base text-[#1c1c1e] truncate pr-2">{pizza.name}</h3>
-                    {pizza.isVegetarian && <span className="bg-green-100 text-green-700 text-[8px] px-1.5 py-0.5 rounded-full font-black tracking-wider shrink-0">VEG</span>}
+                    <h3 className="font-black text-base text-[#1c1c1e] dark:text-white truncate pr-2">{pizza.name}</h3>
+                    {pizza.isVegetarian && <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[8px] px-1.5 py-0.5 rounded-full font-black tracking-wider shrink-0">VEG</span>}
                   </div>
                   <p className="text-[11px] text-[#8E8E93] leading-snug flex-1 italic line-clamp-2">{pizza.ingredients?.join(', ')}</p>
-                  <div className="mt-3 pt-2 border-t border-[#F2F2F7] flex justify-end">
+                  <div className="mt-3 pt-2 border-t border-[#F2F2F7] dark:border-[#38383a] flex justify-end">
                     <span className="text-[#007AFF] text-[9px] font-black uppercase tracking-widest">Scegli</span>
                   </div>
                 </Card>
@@ -268,9 +268,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   return (
     <Layout title={activeTab === 'menu' ? 'InTavola Staff' : 'Profilo'} onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}>
       {showSuccess && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 backdrop-blur-2xl animate-in fade-in duration-300">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
-          <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight">Ordine Inviato!</h2>
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 dark:bg-black/95 backdrop-blur-2xl animate-in fade-in duration-300">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
+          <h2 className="text-2xl font-black text-[#1c1c1e] dark:text-white tracking-tight">Ordine Inviato!</h2>
           <p className="text-[#8E8E93] font-bold mt-1.5 uppercase tracking-widest text-[9px] mb-8 text-center">Troverai la pizza pronta all'orario scelto.</p>
           <div className="w-full max-w-xs space-y-3">
             <Button fullWidth onClick={() => { setShowSuccess(false); setActiveTab('menu'); }}>Torna al Menu</Button>
@@ -289,27 +289,27 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
       {activeTab === 'menu' ? renderMenu() : (
         <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-right duration-300">
-           <Card className="p-6 text-center bg-white shadow-md">
+           <Card className="p-6 text-center bg-white dark:bg-[#1c1c1e] shadow-md">
             <div className="w-16 h-16 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white mx-auto shadow-md mb-4"><UserIcon size={32} /></div>
-            <h2 className="text-lg font-black text-[#1c1c1e]">{user.firstName} {user.lastName}</h2>
-            <p className="text-[9px] font-black text-[#007AFF] uppercase tracking-widest mt-1 bg-[#F2F2F7] inline-block px-3 py-0.5 rounded-full">{user.role}</p>
+            <h2 className="text-lg font-black text-[#1c1c1e] dark:text-white">{user.firstName} {user.lastName}</h2>
+            <p className="text-[9px] font-black text-[#007AFF] uppercase tracking-widest mt-1 bg-[#F2F2F7] dark:bg-[#2c2c2e] inline-block px-3 py-0.5 rounded-full">{user.role}</p>
           </Card>
 
           <div className="grid grid-cols-1 gap-5">
             <section className="space-y-2">
               <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Account</p>
-              <Card className="divide-y divide-[#F2F2F7]">
+              <Card className="divide-y divide-[#F2F2F7] dark:divide-[#38383a]">
                 {isManagement && onBackToAdmin && (
-                  <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold active:bg-[#F2F2F7] transition-all">
+                  <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold active:bg-[#F2F2F7] dark:active:bg-[#2c2c2e] transition-all">
                     <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-[#F2F2F7] text-[#5856D6] rounded-lg"><Sliders size={16} /></div>
+                      <div className="p-1.5 bg-[#F2F2F7] dark:bg-[#2c2c2e] text-[#5856D6] rounded-lg"><Sliders size={16} /></div>
                       <span className="text-xs">Torna al Gestionale</span>
                     </div>
                   </button>
                 )}
-                <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold active:bg-red-50 transition-all">
+                <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold active:bg-red-50 dark:active:bg-red-900/10 transition-all">
                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-red-50 text-[#FF3B30] rounded-lg"><LogOut size={16} /></div>
+                      <div className="p-1.5 bg-red-50 dark:bg-red-900/20 text-[#FF3B30] rounded-lg"><LogOut size={16} /></div>
                       <span className="text-xs">Esci dall'app</span>
                     </div>
                 </button>
@@ -341,22 +341,22 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       {selectedPizza && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end items-center overflow-hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !submitting && setSelectedPizza(null)} />
-          <div className="relative bg-[#F2F2F7] w-full max-w-lg rounded-t-[28px] p-5 space-y-5 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90dvh] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+          <div className="relative bg-[#F2F2F7] dark:bg-black w-full max-w-lg rounded-t-[28px] p-5 space-y-5 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90dvh] pb-[calc(2rem+env(safe-area-inset-bottom))]">
             <button 
               onClick={() => !submitting && setSelectedPizza(null)}
-              className="absolute top-4 right-4 p-2 bg-[#C6C6C8]/20 hover:bg-[#C6C6C8]/40 rounded-full text-[#8E8E93] transition-colors z-10"
+              className="absolute top-4 right-4 p-2 bg-[#C6C6C8]/20 dark:bg-[#C6C6C8]/10 hover:bg-[#C6C6C8]/40 rounded-full text-[#8E8E93] transition-colors z-10"
             >
               <X size={20} />
             </button>
-            <div className="w-10 h-1 bg-[#C6C6C8] rounded-full mx-auto shrink-0 mb-1" />
+            <div className="w-10 h-1 bg-[#C6C6C8] dark:bg-[#38383a] rounded-full mx-auto shrink-0 mb-1" />
             <div className="text-center">
-              <h2 className="text-xl font-black text-[#1c1c1e] truncate pr-10">{selectedPizza.name}</h2>
+              <h2 className="text-xl font-black text-[#1c1c1e] dark:text-white truncate pr-10">{selectedPizza.name}</h2>
               <p className="text-[11px] text-[#8E8E93] mt-1 font-medium">{selectedPizza.ingredients?.join(', ')}</p>
             </div>
             <div className="space-y-5">
               <section className="space-y-2">
                 <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Orario di ritiro</p>
-                <div className="bg-white p-1.5 rounded-xl shadow-sm"><SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} /></div>
+                <div className="bg-white dark:bg-[#1c1c1e] p-1.5 rounded-xl shadow-sm"><SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} /></div>
               </section>
               <div className="space-y-5">
                 <section className="space-y-2">
@@ -364,7 +364,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                     <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Aggiungi (+)</p>
                     <p className="text-[8px] font-bold text-[#007AFF] uppercase">Max 2 variazioni totali</p>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                  <div className="bg-white dark:bg-[#1c1c1e] rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7] dark:divide-[#38383a]">
                     {addOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna aggiunta</p>}
                     {addOptions.map(opt => {
                       const isSelected = selectedAddIds.includes(opt.id);
@@ -373,10 +373,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                         <button 
                           key={opt.id} 
                           onClick={() => handleToggleAdd(opt.id)} 
-                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors ${limitReached ? 'opacity-40' : ''}`}
+                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] dark:active:bg-black/20 transition-colors ${limitReached ? 'opacity-40' : ''}`}
                         >
-                          <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#007AFF] border-[#007AFF]' : 'border-[#C6C6C8]'}`}>
+                          <span className="text-xs font-bold text-[#1c1c1e] dark:text-white">{opt.name}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#007AFF] border-[#007AFF]' : 'border-[#C6C6C8] dark:border-[#38383a]'}`}>
                             {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                           </div>
                         </button>
@@ -388,7 +388,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   <div className="flex justify-between items-center px-1">
                     <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Togli (-)</p>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                  <div className="bg-white dark:bg-[#1c1c1e] rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7] dark:divide-[#38383a]">
                     {removeOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna rimozione</p>}
                     {removeOptions.map(opt => {
                       const isSelected = selectedRemoveIds.includes(opt.id);
@@ -397,10 +397,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                         <button 
                           key={opt.id} 
                           onClick={() => handleToggleRemove(opt.id)} 
-                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors ${limitReached ? 'opacity-40' : ''}`}
+                          className={`w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] dark:active:bg-black/20 transition-colors ${limitReached ? 'opacity-40' : ''}`}
                         >
-                          <span className="text-xs font-bold text-[#1c1c1e]">{opt.name}</span>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#FF3B30] border-[#FF3B30]' : 'border-[#C6C6C8]'}`}>
+                          <span className="text-xs font-bold text-[#1c1c1e] dark:text-white">{opt.name}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#FF3B30] border-[#FF3B30]' : 'border-[#C6C6C8] dark:border-[#38383a]'}`}>
                             {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                           </div>
                         </button>
@@ -411,11 +411,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 {pizzaFlags.length > 0 && (
                   <section className="space-y-2">
                     <p className="text-[9px] font-black text-[#5856D6] uppercase tracking-widest pl-1">Opzioni Speciali (Extra)</p>
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
+                    <div className="bg-white dark:bg-[#1c1c1e] rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7] dark:divide-[#38383a]">
                       {pizzaFlags.map(flag => (
-                        <button key={flag.id} onClick={() => handleToggleFlag(flag.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors text-indigo-700">
+                        <button key={flag.id} onClick={() => handleToggleFlag(flag.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] dark:active:bg-black/20 transition-colors text-indigo-700 dark:text-indigo-400">
                           <span className="text-xs font-bold">{flag.name}</span>
-                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedFlagIds.includes(flag.id) ? 'bg-[#5856D6] border-[#5856D6]' : 'border-[#C6C6C8]'}`}>{selectedFlagIds.includes(flag.id) && <Check size={12} className="text-white" strokeWidth={3} />}</div>
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedFlagIds.includes(flag.id) ? 'bg-[#5856D6] border-[#5856D6]' : 'border-[#C6C6C8] dark:border-[#38383a]'}`}>{selectedFlagIds.includes(flag.id) && <Check size={12} className="text-white" strokeWidth={3} />}</div>
                         </button>
                       ))}
                     </div>
@@ -443,13 +443,13 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       {showRecap && selectedPizza && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => !submitting && setShowRecap(false)} />
-          <Card className="relative w-full max-w-xs p-5 space-y-5 shadow-2xl bg-white rounded-[24px]">
+          <Card className="relative w-full max-w-xs p-5 space-y-5 shadow-2xl bg-white dark:bg-[#1c1c1e] rounded-[24px]">
             <div className="text-center space-y-1">
-              <h3 className="text-lg font-black text-[#1c1c1e] tracking-tight">Riepilogo</h3>
+              <h3 className="text-lg font-black text-[#1c1c1e] dark:text-white tracking-tight">Riepilogo</h3>
               <p className="text-[9px] text-[#8E8E93] font-bold uppercase tracking-widest">Verifica prima di inviare</p>
             </div>
 
-            <div className="bg-[#F2F2F7] p-4 rounded-xl space-y-3">
+            <div className="bg-[#F2F2F7] dark:bg-black/40 p-4 rounded-xl space-y-3 text-[#1c1c1e] dark:text-white">
                 <div className="flex flex-col">
                   <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">La tua pizza</p>
                   <p className="text-base font-black truncate">{selectedPizza.name}</p>
