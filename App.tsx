@@ -11,7 +11,6 @@ import AdminModifications from './views/AdminModifications';
 import AdminCalendar from './views/AdminCalendar';
 import AdminFlags from './views/AdminFlags';
 import { Button } from './components/UI';
-import { Sun, Moon } from './components/Icons';
 
 // Soglia zero: sicurezza massima, nessun tempo di tolleranza.
 const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; 
@@ -24,16 +23,6 @@ const App: React.FC = () => {
   });
 
   const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags'>('dashboard');
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('pizzastaff_darkmode') === 'true');
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('pizzastaff_darkmode', darkMode.toString());
-  }, [darkMode]);
 
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
@@ -80,36 +69,26 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`h-full overflow-hidden flex flex-col ${darkMode ? 'dark text-white' : ''}`}>
-      <div className="flex-1 overflow-y-auto bg-[#F2F2F7] dark:bg-black">
-        {/* Toggle Dark Mode Floating */}
-        <button 
-          onClick={() => setDarkMode(!darkMode)}
-          className="fixed bottom-6 right-6 z-[60] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center bg-white dark:bg-[#1c1c1e] text-black dark:text-white border border-[#C6C6C8] dark:border-[#38383a] active:scale-95 transition-all"
-        >
-          {darkMode ? <Sun size={20} className="text-[#FFD60A]" /> : <Moon size={20} className="text-[#5856D6]" />}
-        </button>
-
-        {view === 'pizzas' ? <AdminPizzas onBack={() => setView('dashboard')} /> :
-         view === 'users' ? <AdminUsers currentUser={auth.user} onBack={() => setView('dashboard')} /> :
-         view === 'history' ? <AdminHistory onBack={() => setView('dashboard')} /> :
-         view === 'modifications' ? <AdminModifications onBack={() => setView('dashboard')} /> :
-         view === 'calendar' ? <AdminCalendar onBack={() => setView('dashboard')} /> :
-         view === 'flags' ? <AdminFlags onBack={() => setView('dashboard')} /> :
-         view === 'order' || auth.user.role === Role.WORKER ? (
-           <WorkerDashboard 
-             user={auth.user} 
-             onLogout={handleLogout} 
-             onBackToAdmin={auth.user.role !== Role.WORKER ? () => setView('dashboard') : undefined} 
-           />
-         ) : (
-           <AdminDashboard 
-             user={auth.user} 
-             onLogout={handleLogout} 
-             onNavigate={(v: any) => setView(v)} 
-             onGoToOrder={() => setView('order')}
-           />
-         )}
+    <div className="bg-[#F2F2F7] h-full overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto">
+        {view === 'pizzas' && <AdminPizzas onBack={() => setView('dashboard')} />}
+        {view === 'users' && <AdminUsers currentUser={auth.user} onBack={() => setView('dashboard')} />}
+        {view === 'history' && <AdminHistory onBack={() => setView('dashboard')} />}
+        {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
+        {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
+        {view === 'flags' && <AdminFlags onBack={() => setView('dashboard')} />}
+        {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
+        {view === 'dashboard' && auth.user.role !== Role.WORKER && (
+          <AdminDashboard 
+            user={auth.user} 
+            onLogout={handleLogout} 
+            onNavigate={(v: any) => setView(v)} 
+            onGoToOrder={() => setView('order')}
+          />
+        )}
+        {auth.user.role === Role.WORKER && (
+          <WorkerDashboard user={auth.user} onLogout={handleLogout} />
+        )}
       </div>
     </div>
   );

@@ -317,10 +317,7 @@ DO $$
  ALTER TABLE pizza_flags DISABLE ROW LEVEL SECURITY;
  ALTER TABLE days DISABLE ROW LEVEL SECURITY;
  ALTER TABLE day_overrides DISABLE ROW LEVEL SECURITY;
- ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
- 
- GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
- GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, postgres;`}
+ ALTER TABLE orders DISABLE ROW LEVEL SECURITY;`}
                 </code>
               </div>
             )}
@@ -400,36 +397,34 @@ DO $$
 
         {/* Menu Amministratore / Supervisor */}
         {isSupervisorOrAdmin && (
-          <div className="space-y-2 pt-4 border-t border-[#C6C6C8] dark:border-[#38383a]">
-            <p className="text-[9px] font-black text-[#8E8E93] dark:text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Configurazione Gestionale</p>
+          <div className="space-y-2 pt-4 border-t border-[#C6C6C8]">
+            <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-3 pl-1">Configurazione Gestionale</p>
             
             {/* Solo per Admin */}
             {isAdmin && (
-              <>
-                <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
-                  <Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari
-                </Button>
-              </>
+              <Button variant="secondary" fullWidth onClick={() => onNavigate('calendar')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+                <Calendar size={18} className="text-[#007AFF]" /> Programmazione Orari
+              </Button>
             )}
 
             {/* Per Admin e Supervisor */}
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('pizzas')} className="justify-start !bg-white border border-[#C6C6C8]/30">
               <PizzaIcon size={18} /> Lista Pizze Menu
             </Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('modifications')} className="justify-start !bg-white border border-[#C6C6C8]/30">
               <Sliders size={18} /> Lista Varianti
             </Button>
-            <Button variant="secondary" fullWidth onClick={() => onNavigate('flags')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
+            <Button variant="secondary" fullWidth onClick={() => onNavigate('flags')} className="justify-start !bg-white border border-[#C6C6C8]/30">
               <Flag size={18} className="text-[#5856D6]" /> Lista Flag (Etichette)
             </Button>
 
             {/* Solo per Admin */}
             {isAdmin && (
               <>
-                <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
+                <Button variant="secondary" fullWidth onClick={() => onNavigate('users')} className="justify-start !bg-white border border-[#C6C6C8]/30">
                   <UsersIcon size={18} /> Lista Dipendenti
                 </Button>
-                <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white dark:!bg-[#1c1c1e] border border-[#C6C6C8]/30 dark:border-[#38383a]">
+                <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30">
                   <History size={18} /> Archivio Storico
                 </Button>
               </>

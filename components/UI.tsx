@@ -25,9 +25,9 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variants = {
     primary: "bg-[#007AFF] text-white shadow-sm",
-    secondary: "bg-[#E5E5EA] dark:bg-[#1c1c1e] text-[#000000] dark:text-white hover:bg-[#D1D1D6] dark:hover:bg-[#2c2c2e]",
+    secondary: "bg-[#E5E5EA] text-[#000000] hover:bg-[#D1D1D6]",
     danger: "bg-[#FF3B30] text-white shadow-sm",
-    ghost: "bg-transparent text-[#007AFF] hover:bg-[#F2F2F7] dark:hover:bg-[#1c1c1e]"
+    ghost: "bg-transparent text-[#007AFF] hover:bg-[#F2F2F7]"
   };
 
   return (
@@ -43,7 +43,7 @@ export const Button: React.FC<ButtonProps> = ({
 export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => {
   return (
     <input 
-      className={`w-full px-4 py-3 rounded-xl bg-white dark:bg-[#1c1c1e] text-black dark:text-white border border-[#C6C6C8] dark:border-[#38383a] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] outline-none transition-all ${className}`}
+      className={`w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] outline-none transition-all ${className}`}
       {...props}
     />
   );
@@ -56,7 +56,7 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => {
   return (
     <div 
-      className={`bg-white dark:bg-[#1c1c1e] text-black dark:text-white rounded-2xl ios-shadow overflow-hidden border border-transparent dark:border-[#38383a] ${className}`}
+      className={`bg-white rounded-2xl ios-shadow overflow-hidden ${className}`}
       {...props}
     >
       {children}
@@ -70,7 +70,7 @@ export const SegmentedControl: React.FC<{
   onChange: (value: string) => void;
 }> = ({ options, selected, onChange }) => {
   return (
-    <div className="flex p-1 bg-[#E5E5EA] dark:bg-[#1c1c1e] rounded-xl w-full">
+    <div className="flex p-1 bg-[#E5E5EA] rounded-xl w-full">
       {options.map((option) => (
         <button
           key={option}
@@ -78,8 +78,8 @@ export const SegmentedControl: React.FC<{
           onClick={() => onChange(option)}
           className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
             selected === option 
-              ? "bg-white dark:bg-[#38383a] text-black dark:text-white shadow-sm" 
-              : "text-[#8E8E93] hover:text-[#000000] dark:hover:text-white"
+              ? "bg-white text-black shadow-sm" 
+              : "text-[#8E8E93] hover:text-[#000000]"
           }`}
         >
           {option}
