@@ -54,11 +54,22 @@ export const generateDayReportPDF = (
   const showSummary = settings?.pdf_show_summary !== false;
   const showList = settings?.pdf_show_list !== false;
 
+  // --- CALCOLO DIMENSIONI ADATTIVE ---
+  // Più ordini ci sono, più piccolo diventa il carattere per risparmiare spazio
+  const getAdaptiveStyles = (count: number) => {
+    if (count <= 35) return { fontSize: 11, lineSpacing: 7, summaryFontSize: 11, padding: 3 };
+    if (count <= 60) return { fontSize: 9.5, lineSpacing: 5.5, summaryFontSize: 10, padding: 2.5 };
+    if (count <= 85) return { fontSize: 8.5, lineSpacing: 4.5, summaryFontSize: 9, padding: 2 };
+    return { fontSize: 7.5, lineSpacing: 3.8, summaryFontSize: 8, padding: 1.5 };
+  };
+
   let isFirstPage = true;
 
   slots.forEach((currentSlot) => {
     const slotOrders = orders.filter(o => o.slotTime === currentSlot);
     if (slotOrders.length === 0) return;
+
+    const styles = getAdaptiveStyles(slotOrders.length);
 
     if (!isFirstPage) {
       doc.addPage();
@@ -84,7 +95,7 @@ export const generateDayReportPDF = (
     // --- SEZIONE: DOTALE PIZZE (Tabella) ---
     if (showSummary) {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
+      doc.setFontSize(styles.fontSize + 3);
       doc.text(`- TOTALE PIZZE: ${slotOrders.length}`, margin, yPos);
       yPos += 8;
 
@@ -107,7 +118,7 @@ export const generateDayReportPDF = (
         body: summaryData,
         theme: 'grid',
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
-        styles: { fontSize: 11, cellPadding: 3, textColor: [0, 0, 0] },
+        styles: { fontSize: styles.summaryFontSize, cellPadding: styles.padding, textColor: [0, 0, 0] },
         columnStyles: { 
           0: { halign: 'center', cellWidth: 30, fontStyle: 'bold' },
           1: { fontStyle: 'bold' }
@@ -128,7 +139,7 @@ export const generateDayReportPDF = (
       }
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
+      doc.setFontSize(styles.fontSize + 3);
       doc.text("- ELENCO", margin, yPos);
       yPos += 10;
 
@@ -139,7 +150,7 @@ export const generateDayReportPDF = (
       });
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
+      doc.setFontSize(styles.fontSize);
       
       namesList.forEach(o => {
         if (yPos > pageHeight - 15) {
@@ -153,7 +164,7 @@ export const generateDayReportPDF = (
         const line = `${name} ${o.pizza?.name || '???'}${comboDisplay}`;
         
         doc.text(line, margin, yPos);
-        yPos += 7;
+        yPos += styles.lineSpacing;
       });
     }
   });
