@@ -4,7 +4,7 @@ import { db } from '../services/db';
 import { User, Role } from '../types';
 import { Layout } from '../components/Layout';
 import { Button, Input, Card } from '../components/UI';
-import { Check, UserPlus, ShieldCheck, AlertCircle, ArrowLeft } from '../components/Icons';
+import { Check, UserPlus, ShieldCheck, AlertCircle, ArrowLeft, Smartphone, Share, MoreVertical } from '../components/Icons';
 
 interface RegisterProps {
   onBack: () => void;
@@ -13,6 +13,7 @@ interface RegisterProps {
 
 const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
   const [step, setStep] = useState(1);
+  const [registeredUser, setRegisteredUser] = useState<User | null>(null);
   const [masterPin, setMasterPin] = useState('');
   const [userData, setUserData] = useState({
     firstName: '',
@@ -119,7 +120,8 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
       // Recupera l'utente appena creato
       const user = await db.getUserByPin(userData.pin);
       if (user) {
-        onSuccess(user);
+        setRegisteredUser(user);
+        setStep(3); // Passaggio alla guida installazione
       } else {
         onBack();
       }
@@ -232,6 +234,64 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
                 <ArrowLeft size={14} /> Indietro
               </button>
             </Card>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-6 animate-in zoom-in duration-500">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check size={32} />
+              </div>
+              <h2 className="text-2xl font-black tracking-tight">Registrazione Completata!</h2>
+              <p className="text-sm font-medium text-[#8E8E93] max-w-[250px] mx-auto">
+                Il tuo account è pronto. Ora rendilo facile da usare!
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest text-center">
+                Aggiungi l'app alla tua schermata Home
+              </p>
+              
+              <div className="grid grid-cols-1 gap-3">
+                {/* Android Guide */}
+                <div className="bg-white border border-gray-100 p-4 rounded-[24px] shadow-sm flex gap-4 items-start">
+                  <div className="p-3 bg-green-50 text-green-600 rounded-2xl">
+                    <Smartphone size={24} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-black flex items-center gap-2">📱 Se hai Android</p>
+                    <p className="text-[11px] leading-relaxed text-gray-600">
+                      Usa <b>Chrome</b>, premi i <b>tre puntini</b> <MoreVertical size={10} className="inline" /> in alto a destra e seleziona <b>"Aggiungi a schermata Home"</b>.
+                    </p>
+                  </div>
+                </div>
+
+                {/* iPhone Guide */}
+                <div className="bg-white border border-gray-100 p-4 rounded-[24px] shadow-sm flex gap-4 items-start">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                    <Share size={24} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-black flex items-center gap-2">🍎 Se hai iPhone</p>
+                    <p className="text-[11px] leading-relaxed text-gray-600">
+                      Usa <b>Safari</b>, premi il tasto <b>Condividi</b> <Share size={10} className="inline" /> (il quadrato con la freccia) e seleziona <b>"Aggiungi a Home"</b>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button 
+                  fullWidth 
+                  onClick={() => registeredUser && onSuccess(registeredUser)}
+                  className="!rounded-[20px]"
+                >
+                  Ho capito, vai al Login
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

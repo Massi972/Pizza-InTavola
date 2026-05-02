@@ -36,6 +36,45 @@ const AdminUsers: React.FC<AdminUsers> = ({ onBack, currentUser }) => {
   const [masterCodeEditing, setMasterCodeEditing] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
   const [messageTarget, setMessageTarget] = useState<User | User[] | null>(null);
+
+  // Recupero della coda persistente al caricamento
+  useEffect(() => {
+    const savedQueue = localStorage.getItem('broadcast_queue');
+    const savedIndex = localStorage.getItem('broadcast_index');
+    const savedMsg = localStorage.getItem('broadcast_message');
+
+    if (savedQueue && savedIndex !== null) {
+      try {
+        const queue = JSON.parse(savedQueue);
+        const index = parseInt(savedIndex);
+        if (queue && queue.length > 0 && index < queue.length) {
+          setBroadcastQueue(queue);
+          setCurrentBroadcastIndex(index);
+          if (savedMsg) setCustomMessage(savedMsg);
+        } else {
+          // Pulisci se i dati sono invalidi o finiti
+          localStorage.removeItem('broadcast_queue');
+          localStorage.removeItem('broadcast_index');
+          localStorage.removeItem('broadcast_message');
+        }
+      } catch (e) {
+        console.error("Errore ripristino coda broadcast", e);
+      }
+    }
+  }, []);
+
+  // Aggiornamento storage quando cambia lo stato del broadcast
+  useEffect(() => {
+    if (broadcastQueue) {
+      localStorage.setItem('broadcast_queue', JSON.stringify(broadcastQueue));
+      localStorage.setItem('broadcast_index', currentBroadcastIndex.toString());
+      localStorage.setItem('broadcast_message', customMessage);
+    } else {
+      localStorage.removeItem('broadcast_queue');
+      localStorage.removeItem('broadcast_index');
+      localStorage.removeItem('broadcast_message');
+    }
+  }, [broadcastQueue, currentBroadcastIndex, customMessage]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,11 +269,17 @@ const AdminUsers: React.FC<AdminUsers> = ({ onBack, currentUser }) => {
     const user = broadcastQueue[currentBroadcastIndex];
     sendWhatsApp(user);
     
-    if (currentBroadcastIndex < broadcastQueue.length - 1) {
-      setCurrentBroadcastIndex(prev => prev + 1);
+    const nextIndex = currentBroadcastIndex + 1;
+    if (nextIndex < broadcastQueue.length) {
+      setCurrentBroadcastIndex(nextIndex);
+      // Lo storage viene aggiornato dall'useEffect sopra
     } else {
-      setBroadcastQueue(null);
-      showToast("Tutti i messaggi inviati! 🚀");
+      setTimeout(() => {
+        setBroadcastQueue(null);
+        setCurrentBroadcastIndex(0);
+        setCustomMessage('');
+        showToast("Tutti i messaggi inviati! 🚀");
+      }, 1000);
     }
   };
 
@@ -786,10 +831,13 @@ Così avrai l’app sempre a portata di mano 👍`;
                 <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
                    <Smartphone size={32} />
                 </div>
-                <p className="text-sm text-[#8E8E93]">
-                   Stai inviando i PIN a <b>{broadcastQueue.length}</b> dipendenti.<br/>
-                   Per ogni persona si aprirà WhatsApp, invia il messaggio e torna qui per il prossimo.
-                </p>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Inviando {currentBroadcastIndex + 1} di {broadcastQueue.length}</p>
+                  <p className="text-sm text-[#8E8E93]">
+                    L'app memorizza il progresso.<br/>
+                    Invia su WhatsApp e torna qui per il prossimo.
+                  </p>
+                </div>
              </div>
 
              <div className="bg-[#F2F2F7] p-4 rounded-2xl">

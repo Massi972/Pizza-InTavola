@@ -40,7 +40,9 @@ import {
   Smartphone,
   UserPlus,
   ShieldCheck,
-  ArrowLeft
+  ArrowLeft,
+  Share,
+  MoreVertical
 } from 'lucide-react';
 
 export {
@@ -83,5 +85,7 @@ export {
   Smartphone,
   UserPlus,
   ShieldCheck,
-  ArrowLeft
+  ArrowLeft,
+  Share,
+  MoreVertical
 };
