@@ -34,6 +34,8 @@ const AdminUsers: React.FC<AdminUsers> = ({ onBack, currentUser }) => {
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [updatingMasterCode, setUpdatingMasterCode] = useState(false);
   const [masterCodeEditing, setMasterCodeEditing] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
+  const [messageTarget, setMessageTarget] = useState<User | User[] | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -262,6 +264,11 @@ const AdminUsers: React.FC<AdminUsers> = ({ onBack, currentUser }) => {
     }
   };
 
+  const handleOpenMessageModal = (target: User | User[]) => {
+    setMessageTarget(target);
+    setCustomMessage(''); // Vuoto come richiesto
+  };
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
@@ -308,10 +315,31 @@ Così avrai l’app sempre a portata di mano 👍`;
       return;
     }
 
-    const msg = encodeURIComponent(getPINMessage(user));
+    const msg = encodeURIComponent(customMessage || getPINMessage(user));
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`;
     
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handleSendPromptedMessage = () => {
+    if (!messageTarget) return;
+
+    if (!customMessage.trim()) {
+      if (!confirm("Il messaggio è vuoto. Vuoi inviare il messaggio standard con il PIN?")) {
+        return;
+      }
+    }
+
+    if (Array.isArray(messageTarget)) {
+      // Invio multiplo (Broadcast)
+      setBroadcastQueue(messageTarget);
+      setCurrentBroadcastIndex(0);
+      setMessageTarget(null);
+    } else {
+      // Invio singolo
+      sendWhatsApp(messageTarget);
+      setMessageTarget(null);
+    }
   };
 
   const handleDelete = async (user: User) => {
@@ -434,11 +462,17 @@ Così avrai l’app sempre a portata di mano 👍`;
         return;
       }
 
+      const savedUser = { ...editing } as User;
       await db.saveUser(editing);
       await fetchUsers();
       
       showToast("Dati salvati correttamente ✅");
       setEditing(null);
+      
+      // Apri automaticamente il modal del messaggio per l'utente salvato
+      setTimeout(() => {
+        handleOpenMessageModal(savedUser);
+      }, 500);
     } catch (err: any) {
       setError(err.message || "Errore nel salvataggio. Verifica i dati inseriti.");
     } finally {
@@ -599,14 +633,25 @@ Così avrai l’app sempre a portata di mano 👍`;
                         <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">{u.role}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 relative z-10">
-                      <button 
-                        onClick={(e) => { 
-                          e.preventDefault();
-                          e.stopPropagation(); 
-                          setEditing(u); 
-                          setError(''); 
-                        }} 
+                      <div className="flex gap-2 relative z-10">
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleOpenMessageModal(u);
+                          }}
+                          className="p-2 text-green-600 bg-green-50 rounded-full active:scale-90 transition-transform"
+                          title="Invia messaggio personalizzato"
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.preventDefault();
+                            e.stopPropagation(); 
+                            setEditing(u); 
+                            setError(''); 
+                          }} 
                         className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full active:scale-90 transition-transform"
                       >
                         <Edit2 size={16} />
@@ -659,9 +704,9 @@ Così avrai l’app sempre a portata di mano 👍`;
             </div>
             <div className="flex gap-2">
               <button 
-                onClick={handleStartBroadcast}
+                onClick={() => handleOpenMessageModal(users.filter(u => selectedIds.includes(u.id)))}
                 className="p-3 bg-[#25D366] text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
-                title="Invia PIN su WhatsApp"
+                title="Invia Messaggio su WhatsApp"
               >
                 <MessageCircle size={20} />
               </button>
@@ -687,6 +732,43 @@ Così avrai l’app sempre a portata di mano 👍`;
                 <Trash2 size={20} />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Messaggio Personalizzato */}
+      {messageTarget && (
+        <div className="fixed inset-0 z-[110] flex flex-col justify-center items-center p-6 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 space-y-4 shadow-2xl animate-in zoom-in duration-300">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black tracking-tight">Crea Messaggio</h3>
+              <button onClick={() => setMessageTarget(null)} className="p-2 bg-gray-100 rounded-full"><X size={18} /></button>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest pl-1">
+                Destinatario: {Array.isArray(messageTarget) ? `${messageTarget.length} persone` : `${messageTarget.firstName} ${messageTarget.lastName}`}
+              </p>
+              <textarea 
+                className="w-full h-40 p-4 bg-[#F2F2F7] rounded-2xl border-none outline-none text-sm font-medium resize-none focus:ring-2 ring-indigo-500/20"
+                placeholder="Scrivi qui il tuo messaggio..."
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+              />
+              <div className="flex justify-between px-1">
+                <button 
+                  onClick={() => setCustomMessage(Array.isArray(messageTarget) ? '' : getPINMessage(messageTarget as User))}
+                  className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1"
+                >
+                  <RefreshCw size={10} /> Carica Messaggio PIN
+                </button>
+                <span className="text-[10px] font-bold text-[#8E8E93]">{customMessage.length} caratteri</span>
+              </div>
+            </div>
+
+            <Button fullWidth className="!bg-[#25D366]" onClick={handleSendPromptedMessage}>
+              <MessageCircle size={18} /> Invia su WhatsApp
+            </Button>
           </div>
         </div>
       )}
