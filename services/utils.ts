@@ -42,18 +42,9 @@ export const getDayAvailability = (
   // 1. PRIORITÀ MASSIMA: CONTROLLO MANUALE (ADMIN ACTION)
   if (manualDayRecord && isToday) {
     if (manualDayRecord.status === DayStatus.OPEN) {
-      if (!isBeforeCutoff(cutoffTimeStr)) {
-        return { 
-          isActive: false, 
-          label: `CHIUSO (OLTRE ${cutoffTimeStr})`, 
-          colorClass: 'text-red-500 bg-red-50 font-bold',
-          isToday, 
-          dayName 
-        };
-      }
       return { 
         isActive: true, 
-        label: 'APERTO (MANUALE)', 
+        label: 'APERTO (FORZATO)', 
         colorClass: 'text-green-600 bg-green-100 font-black',
         isToday, 
         dayName 
@@ -76,12 +67,7 @@ export const getDayAvailability = (
       return { isActive: false, label: 'CHIUSO (FORZATO)', colorClass: 'text-red-700 bg-red-50 font-bold', isToday, dayName, isForced: true };
     }
     if (override.type === OverrideType.FORCE_OPEN || override.type === OverrideType.EXTRA) {
-      let active = true;
-      if (isToday && !isBeforeCutoff(cutoffTimeStr)) {
-        active = false;
-        return { isActive: false, label: `CHIUSO (OLTRE ${cutoffTimeStr})`, colorClass: 'text-red-500 bg-red-50', isToday, dayName };
-      }
-      return { isActive: active, label: 'APERTO (FORZATO)', colorClass: 'text-green-700 bg-green-100 font-bold', isToday, dayName, isForced: true };
+      return { isActive: true, label: 'APERTO (FORZATO)', colorClass: 'text-green-700 bg-green-100 font-bold', isToday, dayName, isForced: true };
     }
   }
 

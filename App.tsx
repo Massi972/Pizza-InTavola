@@ -10,6 +10,7 @@ import AdminHistory from './views/AdminHistory';
 import AdminModifications from './views/AdminModifications';
 import AdminCalendar from './views/AdminCalendar';
 import AdminFlags from './views/AdminFlags';
+import RegisterView from './views/Register';
 import { Button } from './components/UI';
 
 // Soglia zero: sicurezza massima, nessun tempo di tolleranza.
@@ -23,12 +24,14 @@ const App: React.FC = () => {
   });
 
   const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags'>('dashboard');
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const handleLogout = useCallback(() => {
     setAuth({ user: null, isAuthenticated: false });
     sessionStorage.removeItem('pizzastaff_auth');
     localStorage.removeItem('pizzastaff_last_background_at');
     setView('dashboard');
+    setIsRegistering(false);
   }, []);
 
   // --- SICUREZZA TOTALE: Logout immediato al cambio visibilità ---
@@ -62,10 +65,14 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setAuth({ user, isAuthenticated: true });
+    setIsRegistering(false);
   };
 
   if (!auth.isAuthenticated || !auth.user) {
-    return <LoginView onLogin={handleLogin} />;
+    if (isRegistering) {
+      return <RegisterView onBack={() => setIsRegistering(false)} onSuccess={handleLogin} />;
+    }
+    return <LoginView onLogin={handleLogin} onRegister={() => setIsRegistering(true)} />;
   }
 
   return (

@@ -60,7 +60,7 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     try {
       // Pulisco l'oggetto per assicurarmi di inviare solo i campi previsti dal database
       const cleanPayload = {
-        emergency_pin: updatedSettings.emergency_pin,
+        registration_pin: updatedSettings.registration_pin,
         cutoff_time: updatedSettings.cutoff_time,
         active_days: updatedSettings.active_days,
         override_cutoff: updatedSettings.override_cutoff,
@@ -139,9 +139,9 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
-  const handleEmergencyPinChange = (val: string) => {
+  const handleRegistrationPinChange = (val: string) => {
     if (!settings) return;
-    const updated = { ...settings, emergency_pin: val };
+    const updated = { ...settings, registration_pin: val };
     setSettings(updated);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => persistSettings(updated), 800);
@@ -197,9 +197,8 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
 {`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_time TEXT DEFAULT '16:30';
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS emergency_pin TEXT DEFAULT '0000';
-ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_title TEXT DEFAULT 'IN TAVOLA - PIZZA STAFF';
-ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_summary BOOLEAN DEFAULT true;
-ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true;`}
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS registration_open BOOLEAN DEFAULT true;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_title TEXT DEFAULT 'IN TAVOLA - PIZZA STAFF';`}
                 </code>
               </div>
             )}
@@ -213,22 +212,22 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true
             <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest">Sicurezza e Accesso</p>
           </div>
           <div className="grid grid-cols-1 gap-3">
-            <Card className="p-4 bg-white border-l-4 border-[#FF3B30]">
+            <Card className="p-4 bg-white border-l-4 border-indigo-500">
               <div className="flex justify-between items-center mb-1">
-                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">PIN Master di Emergenza</p>
+                <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-tighter">Codice Registrazione Dipendenti</p>
                 {isSaving && !savingId && <div className="loading-spinner !w-3 !h-3" />}
               </div>
               <Input 
                 type="text" 
                 inputMode="numeric"
                 pattern="[0-9]*"
-                maxLength={4}
-                value={settings?.emergency_pin || ''} 
-                onChange={(e) => handleEmergencyPinChange(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="4 Cifre"
-                className="font-mono font-black text-xl text-[#FF3B30] tracking-widest border-none bg-[#F2F2F7] rounded-xl"
+                maxLength={6}
+                value={settings?.registration_pin || ''} 
+                onChange={(e) => handleRegistrationPinChange(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="4-6 Cifre"
+                className="font-mono font-black text-xl text-indigo-600 tracking-widest border-none bg-[#F2F2F7] rounded-xl"
               />
-              <p className="text-[8px] text-[#8E8E93] font-bold uppercase mt-2 italic px-1">PIN Segreto per l'amministratore (Ex 0000)</p>
+              <p className="text-[8px] text-[#8E8E93] font-bold uppercase mt-2 italic px-1">Codice da fornire ai dipendenti per la prima registrazione</p>
             </Card>
           </div>
         </section>

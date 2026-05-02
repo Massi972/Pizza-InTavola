@@ -5,9 +5,10 @@ import { PizzaIcon } from '../components/Icons';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  onRegister: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -82,6 +83,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
             
             <button onClick={() => setPin('')} className="w-full mt-8 text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]">Cancella</button>
+            <button 
+              onClick={onRegister} 
+              className="w-full mt-4 py-3 rounded-2xl bg-white border border-[#D1D1D6] text-xs font-bold text-[#1c1c1e] shadow-sm uppercase tracking-widest active:scale-95 transition-all"
+            >
+              Non sei in lista? Registrati
+            </button>
           </div>
           
           <p className="text-center mt-12 text-[9px] font-bold text-[#C6C6C8] uppercase tracking-[0.1em] max-w-[200px] leading-relaxed">

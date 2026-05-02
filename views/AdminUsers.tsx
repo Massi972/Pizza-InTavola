@@ -1,35 +1,56 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Role } from '../types';
 import { db } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, Input } from '../components/UI';
-import { Plus, Edit2, Trash2, X, AlertCircle, Check, Copy, MessageCircle, RefreshCw, Search } from '../components/Icons';
+import { 
+  Plus, Edit2, Trash2, X, AlertCircle, Check, Copy, MessageCircle, 
+  RefreshCw, Search, FileDown, FileUp, MoreHorizontal, UserCheck, UserX,
+  Smartphone, Lock, Unlock
+} from '../components/Icons';
+import * as XLSX from 'xlsx';
 
-interface AdminUsersProps {
+interface AdminUsers {
   onBack: () => void;
   currentUser?: User;
 }
 
-const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
+const AdminUsers: React.FC<AdminUsers> = ({ onBack, currentUser }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [editing, setEditing] = useState<Partial<User> | null>(null);
-  const [successUser, setSuccessUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBatchMobile, setShowBatchMobile] = useState(false);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [broadcastQueue, setBroadcastQueue] = useState<User[] | null>(null);
+  const [currentBroadcastIndex, setCurrentBroadcastIndex] = useState(0);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'single', user: User } | { type: 'bulk', count: number } | null>(null);
+  const [masterCode, setMasterCode] = useState('');
+  const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [updatingMasterCode, setUpdatingMasterCode] = useState(false);
+  const [masterCodeEditing, setMasterCodeEditing] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = currentUser?.role === Role.ADMIN;
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const data = await db.getUsers();
-      setUsers(data);
+      const [usersData, settingsData] = await Promise.all([
+        db.getUsers(),
+        db.getSettings()
+      ]);
+      setUsers(usersData);
+      setMasterCode(settingsData.registration_pin || '0000');
+      setRegistrationOpen(settingsData.registration_open);
     } catch (err) {
-      console.error("Errore fetch users:", err);
+      console.error("Errore fetch data:", err);
     } finally {
       setLoading(false);
     }
@@ -41,18 +62,179 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onBack, currentUser }) => {
     }
   }, [isAdmin]);
 
-  if (!isAdmin) {
-    return (
-      <Layout title="Accesso Negato" onBack={onBack}>
-        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-          <AlertCircle size={48} className="text-red-500" />
-          <h2 className="text-xl font-bold">Non autorizzato</h2>
-          <p className="text-sm text-[#8E8E93]">Solo gli amministratori possono gestire i dipendenti e i PIN.</p>
-          <Button onClick={onBack}>Torna alla Dashboard</Button>
-        </div>
-      </Layout>
-    );
-  }
+  const filteredUsers = users.filter(u => {
+    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return fullName.includes(search) || (u.email && u.email.toLowerCase().includes(search));
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredUsers.length && filteredUsers.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBatchStatus = async (active: boolean) => {
+    if (selectedIds.length === 0) return;
+    setLoading(true);
+    try {
+      await db.setUsersStatus(selectedIds, active);
+      showToast(`Aggiornati ${selectedIds.length} utenti ✅`);
+      await fetchUsers();
+      setSelectedIds([]);
+    } catch (err) {
+      alert("Errore nell'aggiornamento bulk");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (selectedIds.includes(currentUser?.id || '')) {
+      alert("Non puoi eliminare il tuo account amministratore nelle azioni di massa.");
+      return;
+    }
+    setDeleteConfirm({ type: 'bulk', count: selectedIds.length });
+  };
+
+  const executeBatchDelete = async () => {
+    const idsToDelete = [...selectedIds];
+    const previousUsers = [...users];
+    
+    setDeleteConfirm(null);
+    setLoading(true);
+    
+    // Ottimismo UI
+    setUsers(prev => prev.filter(u => !idsToDelete.includes(u.id)));
+    setSelectedIds([]);
+
+    try {
+      await db.deleteUsersBulk(idsToDelete);
+      showToast(`Eliminati ${idsToDelete.length} utenti ✅`);
+      await fetchUsers();
+    } catch (err: any) {
+      console.error("Errore eliminazione bulk:", err);
+      setUsers(previousUsers);
+      setSelectedIds(idsToDelete);
+      alert("Errore nell'eliminazione di massa: " + (err.message || 'Errore database'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    try {
+      const dataToExport = users.map(u => ({
+        Nome: u.firstName,
+        Cognome: u.lastName,
+        Email: u.email || '',
+        Telefono: u.phone_e164,
+        PIN: u.pin,
+        Ruolo: u.role,
+        Stato: u.active ? 'ATTIVO' : 'SOSPESO'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Dipendenti");
+      XLSX.writeFile(wb, `Lista_Dipendenti_${new Date().toLocaleDateString('it-IT')}.xlsx`);
+      showToast("File esportato! 📥");
+    } catch (err) {
+      alert("Errore durante l'esportazione");
+    }
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        const newUsers: Partial<User>[] = [];
+        const existingPhones = users.map(u => u.phone_e164);
+        const existingPins = users.map(u => u.pin);
+
+        for (const row of data) {
+          const nome = (row.Nome || row.nome || '').trim();
+          const cognome = (row.Cognome || row.cognome || '').trim();
+          const email = (row.Email || row.email || '').trim();
+          let tel = String(row.Telefono || row.telefono || '').trim();
+
+          if (!nome || !cognome) continue;
+          if (!tel.startsWith('+')) tel = '+39' + tel.replace(/\D/g, '');
+          
+          if (existingPhones.includes(tel)) continue;
+
+          // Genera PIN
+          let pin = '';
+          while (!pin || existingPins.includes(pin)) {
+            pin = Math.floor(1000 + Math.random() * 9000).toString();
+          }
+          existingPins.push(pin);
+
+          newUsers.push({
+            firstName: nome,
+            lastName: cognome,
+            phone_e164: tel,
+            email: email,
+            pin,
+            role: Role.WORKER,
+            active: true
+          });
+        }
+
+        if (newUsers.length > 0) {
+          await db.saveUsersBulk(newUsers);
+          showToast(`Importati ${newUsers.length} nuovi utenti ✅`);
+          await fetchUsers();
+        } else {
+          alert("Nessun nuovo utente da importare (controlla i dati o se i telefoni sono già presenti)");
+        }
+      } catch (err) {
+        console.error("Errore import:", err);
+        alert("Errore durante l'importazione del file. Assicurati che le colonne siano Nome, Cognome, Telefono.");
+      } finally {
+        setBulkImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleStartBroadcast = () => {
+    if (selectedIds.length === 0) return;
+    const selectedUsers = users.filter(u => selectedIds.includes(u.id));
+    setBroadcastQueue(selectedUsers);
+    setCurrentBroadcastIndex(0);
+  };
+
+  const sendNextBroadcast = () => {
+    if (!broadcastQueue) return;
+    const user = broadcastQueue[currentBroadcastIndex];
+    sendWhatsApp(user);
+    
+    if (currentBroadcastIndex < broadcastQueue.length - 1) {
+      setCurrentBroadcastIndex(prev => prev + 1);
+    } else {
+      setBroadcastQueue(null);
+      showToast("Tutti i messaggi inviati! 🚀");
+    }
+  };
 
   const generateUniquePin = () => {
     let newPin = '';
@@ -137,28 +319,78 @@ Così avrai l’app sempre a portata di mano 👍`;
       alert("Operazione non consentita: non puoi eliminare il tuo stesso account amministratore.");
       return;
     }
+    setDeleteConfirm({ type: 'single', user });
+  };
 
-    if (window.confirm(`Sei sicuro di voler eliminare definitivamente ${user.firstName} ${user.lastName}? Questa operazione non può essere annullata.`)) {
-      try {
-        setLoading(true);
-        await db.deleteUser(user.id);
-        showToast("Utente eliminato ✅");
-        await fetchUsers();
-      } catch (err: any) {
-        console.error("Errore eliminazione utente:", err);
-        alert(`Errore: ${err.message || "Impossibile eliminare l'utente"}`);
-      } finally {
-        setLoading(false);
-      }
+  const executeSingleDelete = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== 'single') return;
+    const userToDelete = deleteConfirm.user;
+    
+    setDeleteConfirm(null);
+    setLoading(true);
+
+    // Ottimismo UI
+    const previousUsers = [...users];
+    setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+    setSelectedIds(prev => prev.filter(id => id !== userToDelete.id));
+
+    try {
+      await db.deleteUser(userToDelete.id);
+      showToast("Utente eliminato ✅");
+      await fetchUsers();
+    } catch (err: any) {
+      console.error("Errore eliminazione utente:", err);
+      setUsers(previousUsers);
+      alert(`Errore: ${err.message || "Impossibile eliminare l'utente"}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveMasterCode = async () => {
+    if (!masterCode || !/^\d{4,6}$/.test(masterCode)) {
+      alert("Il Codice di Registrazione deve essere un numero di 4-6 cifre.");
+      return;
+    }
+    setUpdatingMasterCode(true);
+    try {
+      await db.updateSettings({ 
+        registration_pin: masterCode,
+        registration_open: registrationOpen
+      });
+      showToast("Configurazione aggiornata! 🔑");
+      setMasterCodeEditing(false);
+    } catch (err) {
+      alert("Errore nell'aggiornamento della configurazione");
+    } finally {
+      setUpdatingMasterCode(false);
+    }
+  };
+
+  const handleToggleRegistration = async (newValue: boolean) => {
+    setUpdatingMasterCode(true);
+    try {
+      await db.updateSettings({ registration_open: newValue });
+      setRegistrationOpen(newValue);
+      showToast(newValue ? "Registrazioni APERTE ✅" : "Registrazioni CHIUSE 🔒");
+    } catch (err) {
+      alert("Errore durante l'aggiornamento");
+    } finally {
+      setUpdatingMasterCode(false);
     }
   };
 
   const handleSave = async () => {
-    if (!editing?.firstName || !editing?.lastName || !editing?.pin || !editing?.phone_e164) {
-      setError('Tutti i campi (Nome, Cognome, Telefono e PIN) sono obbligatori');
+    if (!editing?.firstName?.trim() || !editing?.lastName?.trim() || !editing?.pin || !editing?.phone_e164?.trim() || !editing?.email?.trim()) {
+      setError('Tutti i campi (Nome, Cognome, Email, Telefono e PIN) sono obbligatori');
       return;
     }
     
+    if (!editing.email.includes('@')) {
+      setError('Inserisci un indirizzo email valido');
+      return;
+    }
+
     if (!editing.phone_e164.includes('+')) {
       setError('Inserisci il prefisso internazionale (es. +39 per Italia)');
       return;
@@ -169,21 +401,35 @@ Così avrai l’app sempre a portata di mano 👍`;
       return;
     }
 
+    if (editing.pin === masterCode) {
+      setError('Il PIN personale non può essere uguale al Codice di Registrazione.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     
     try {
-      const isAvailable = await db.isPinAvailable(editing.pin, editing.id);
-      if (!isAvailable) {
-        setError('Questo PIN è già in uso da un altro utente attivo. Generane uno nuovo.');
+      const [isPinAvailable, isEmailAvailable, isPhoneAvailable] = await Promise.all([
+        db.isPinAvailable(editing.pin, editing.id),
+        db.isEmailAvailable(editing.email, editing.id),
+        db.isPhoneAvailable(editing.phone_e164, editing.id)
+      ]);
+
+      if (!isPinAvailable) {
+        setError('Questo PIN è già in uso o riservato. Scegline o generane un altro.');
         setSaving(false);
         return;
       }
 
-      // Controllo univocità numero di telefono
-      const phoneExists = users.find(u => u.phone_e164 === editing.phone_e164 && u.id !== editing.id);
-      if (phoneExists) {
-        setError(`Questo numero di telefono è già associato a ${phoneExists.firstName} ${phoneExists.lastName}.`);
+      if (!isEmailAvailable) {
+        setError('Questa email è già registrata nel sistema.');
+        setSaving(false);
+        return;
+      }
+
+      if (!isPhoneAvailable) {
+        setError('Questo numero di telefono è già registrato nel sistema.');
         setSaving(false);
         return;
       }
@@ -191,19 +437,14 @@ Così avrai l’app sempre a portata di mano 👍`;
       await db.saveUser(editing);
       await fetchUsers();
       
-      setSuccessUser({ ...editing as User });
+      showToast("Dati salvati correttamente ✅");
       setEditing(null);
     } catch (err: any) {
-      setError(err.message || "Errore nel salvataggio. Verifica che il numero di telefono sia univoco.");
+      setError(err.message || "Errore nel salvataggio. Verifica i dati inseriti.");
     } finally {
       setSaving(false);
     }
   };
-
-  const filteredUsers = users.filter(u => {
-    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
-    return fullName.includes(searchTerm.toLowerCase());
-  });
 
   return (
     <Layout title="Gestione Personale" onBack={onBack}>
@@ -214,9 +455,86 @@ Così avrai l’app sempre a portata di mano 👍`;
       )}
 
       <div className="space-y-4">
-        <Button fullWidth onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, phone_e164: '+39' }); setError(''); }}>
-          <Plus size={20} /> Nuovo Dipendente
-        </Button>
+        {/* Gestione PIN Master per Registrazione */}
+        <Card className={`p-4 overflow-hidden relative transition-colors ${registrationOpen ? 'bg-indigo-50 border-indigo-100' : 'bg-gray-50 border-gray-100 opacity-80'}`}>
+          <div className="flex justify-between items-start gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className={`font-black tracking-tight ${registrationOpen ? 'text-indigo-900' : 'text-gray-600'}`}>Registrazione Dipendenti</h3>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${registrationOpen ? 'bg-indigo-200 text-indigo-700' : 'bg-gray-200 text-gray-500'}`}>
+                  {registrationOpen ? 'APERTA' : 'CHIUSA'}
+                </span>
+              </div>
+              <p className="text-xs text-[#8E8E93] leading-snug">
+                {registrationOpen 
+                  ? "Il Codice di Registrazione qui sotto permette ai dipendenti di registrarsi." 
+                  : "Nessun nuovo dipendente può registrarsi finché non riapri l'accesso."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => handleToggleRegistration(!registrationOpen)}
+                className={`p-2 rounded-xl transition-all shadow-sm active:scale-90 ${registrationOpen ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'}`}
+                title={registrationOpen ? "Chiudi registrazioni" : "Apri registrazioni"}
+              >
+                {registrationOpen ? <Lock size={18} /> : <Unlock size={18} />}
+              </button>
+              <button 
+                onClick={() => setMasterCodeEditing(!masterCodeEditing)}
+                className="p-2 bg-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-200 transition-colors"
+                title="Modifica Codice"
+              >
+                <Edit2 size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-end justify-between">
+            {masterCodeEditing ? (
+              <div className="flex gap-2 flex-1 animate-in slide-in-from-top duration-300">
+                <Input 
+                  value={masterCode}
+                  onChange={e => setMasterCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Nuovo Codice"
+                  className="font-mono font-bold tracking-[0.2em] text-center"
+                />
+                <Button 
+                  onClick={handleSaveMasterCode}
+                  disabled={updatingMasterCode}
+                  className="!bg-indigo-600"
+                >
+                  {updatingMasterCode ? <RefreshCw size={18} className="animate-spin" /> : <Check size={18} />}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-black font-mono tracking-tighter ${registrationOpen ? 'text-indigo-900' : 'text-gray-400'}`}>{masterCode}</span>
+                <span className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest">Codice Registrazione</span>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <div className="flex gap-2">
+          <Button className="flex-1" onClick={() => { setEditing({ role: Role.WORKER, pin: '', active: true, phone_e164: '+39', email: '' }); setError(''); }}>
+            <Plus size={20} /> Nuovo
+          </Button>
+          <Button variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={bulkImporting} className="bg-emerald-50 text-emerald-600 border-emerald-100">
+            {bulkImporting ? <RefreshCw size={20} className="animate-spin" /> : <FileUp size={20} />}
+            <span className="hidden sm:inline ml-2">Importa</span>
+          </Button>
+          <Button variant="secondary" onClick={handleExportCSV} className="bg-indigo-50 text-indigo-600 border-indigo-100">
+            <FileDown size={20} />
+            <span className="hidden sm:inline ml-2">Esporta</span>
+          </Button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImportCSV} 
+            accept=".csv,.xlsx,.xls" 
+            className="hidden" 
+          />
+        </div>
 
         <div className="relative">
           <Input 
@@ -238,19 +556,39 @@ Così avrai l’app sempre a portata di mano 👍`;
           )}
         </div>
 
+        <div className="flex justify-between items-center px-1">
+          <button 
+            onClick={toggleSelectAll}
+            className="text-[10px] font-bold text-[#007AFF] uppercase tracking-widest flex items-center gap-1"
+          >
+            {selectedIds.length === filteredUsers.length ? <UserX size={14} /> : <UserCheck size={14} />}
+            {selectedIds.length === filteredUsers.length ? 'Deseleziona Tutti' : 'Seleziona Tutti'}
+          </button>
+          <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest">
+            {selectedIds.length} Selezionati
+          </p>
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20"><div className="loading-spinner" /></div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-24">
             {filteredUsers.length === 0 ? (
               <p className="text-center text-[#8E8E93] py-10">
                 {searchTerm ? "Nessun risultato trovato" : "Nessun dipendente registrato"}
               </p>
             ) : (
               filteredUsers.map(u => (
-                <Card key={u.id} className={`p-4 ${!u.active ? 'opacity-50 grayscale' : ''}`}>
+                <Card 
+                  key={u.id} 
+                  className={`p-4 transition-all ${!u.active ? 'opacity-50 grayscale' : ''} ${selectedIds.includes(u.id) ? 'ring-2 ring-indigo-500 shadow-lg translate-x-1' : ''}`}
+                  onClick={() => toggleSelect(u.id)}
+                >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedIds.includes(u.id) ? 'bg-indigo-500 border-indigo-500' : 'border-[#C6C6C8]'}`}>
+                        {selectedIds.includes(u.id) && <Check size={14} className="text-white" />}
+                      </div>
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
                         u.role === Role.ADMIN ? 'bg-[#FF3B30]' : u.role === Role.SUPERVISOR ? 'bg-[#5856D6]' : 'bg-[#007AFF]'
                       }`}>
@@ -261,11 +599,26 @@ Così avrai l’app sempre a portata di mano 👍`;
                         <p className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">{u.role}</p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => { setEditing(u); setError(''); }} className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full">
+                    <div className="flex gap-2 relative z-10">
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault();
+                          e.stopPropagation(); 
+                          setEditing(u); 
+                          setError(''); 
+                        }} 
+                        className="p-2 text-[#007AFF] bg-[#F2F2F7] rounded-full active:scale-90 transition-transform"
+                      >
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => handleDelete(u)} className="p-2 text-[#FF3B30] bg-red-50 rounded-full">
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault();
+                          e.stopPropagation(); 
+                          handleDelete(u); 
+                        }} 
+                        className="p-2 text-[#FF3B30] bg-red-50 rounded-full active:scale-90 transition-transform"
+                      >
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -276,15 +629,18 @@ Così avrai l’app sempre a portata di mano 👍`;
                         <Check size={14} /> PIN configurato
                       </span>
                       <button 
-                        onClick={() => { setEditing({ ...u, pin: '' }); setError(''); }}
+                        onClick={(e) => { e.stopPropagation(); setEditing({ ...u, pin: '' }); setError(''); }}
                         className="text-[10px] bg-[#F2F2F7] px-2 py-1 rounded-full font-bold uppercase flex items-center gap-1 hover:bg-[#E5E5EA]"
                       >
                         <RefreshCw size={10} /> Rigenera
                       </button>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {u.active ? 'ATTIVO' : 'SOSPESO'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                       {u.phone_e164 && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100 font-medium">{u.phone_e164}</span>}
+                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {u.active ? 'ATTIVO' : 'SOSPESO'}
+                      </span>
+                    </div>
                   </div>
                 </Card>
               ))
@@ -292,6 +648,128 @@ Così avrai l’app sempre a portata di mano 👍`;
           </div>
         )}
       </div>
+
+      {/* Barra Azioni di Massa */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/80 backdrop-blur-xl border-t border-[#E5E5EA] animate-in slide-in-from-bottom duration-300">
+          <div className="max-w-md mx-auto flex items-center justify-between gap-3">
+            <div className="flex-1">
+              <p className="text-[10px] font-black text-indigo-500 uppercase leading-none">{selectedIds.length} Selezionati</p>
+              <button onClick={() => setSelectedIds([])} className="text-[10px] font-bold text-[#8E8E93] uppercase hover:text-black">Annulla</button>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={handleStartBroadcast}
+                className="p-3 bg-[#25D366] text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
+                title="Invia PIN su WhatsApp"
+              >
+                <MessageCircle size={20} />
+              </button>
+              <button 
+                onClick={() => handleBatchStatus(true)}
+                className="p-3 bg-green-500 text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
+                title="Attiva selezionati"
+              >
+                <UserCheck size={20} />
+              </button>
+              <button 
+                onClick={() => handleBatchStatus(false)}
+                className="p-3 bg-[#FF9500] text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
+                title="Disattiva selezionati"
+              >
+                <UserX size={20} />
+              </button>
+              <button 
+                onClick={handleBatchDelete}
+                className="p-3 bg-[#FF3B30] text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
+                title="Elimina selezionati"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Broadcast Queue */}
+      {broadcastQueue && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-center items-center p-6 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 space-y-6 shadow-2xl animate-in zoom-in duration-300">
+             <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black tracking-tight">Invio Multiplo PIN</h3>
+                <button onClick={() => setBroadcastQueue(null)}><X /></button>
+             </div>
+             
+             <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                   <Smartphone size={32} />
+                </div>
+                <p className="text-sm text-[#8E8E93]">
+                   Stai inviando i PIN a <b>{broadcastQueue.length}</b> dipendenti.<br/>
+                   Per ogni persona si aprirà WhatsApp, invia il messaggio e torna qui per il prossimo.
+                </p>
+             </div>
+
+             <div className="bg-[#F2F2F7] p-4 rounded-2xl">
+                <p className="text-[10px] font-bold text-[#8E8E93] uppercase">Prossimo in lista:</p>
+                <p className="font-bold text-lg">{broadcastQueue[currentBroadcastIndex]?.firstName} {broadcastQueue[currentBroadcastIndex]?.lastName}</p>
+                <p className="text-xs text-indigo-500 font-bold">{broadcastQueue[currentBroadcastIndex]?.phone_e164}</p>
+             </div>
+
+             <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="absolute inset-y-0 left-0 bg-[#25D366] transition-all duration-500" 
+                  style={{ width: `${((currentBroadcastIndex + 1) / broadcastQueue.length) * 100}%` }}
+                />
+             </div>
+
+             <Button fullWidth className="!bg-[#25D366]" onClick={sendNextBroadcast}>
+                <MessageCircle size={18} /> Invia Messaggio ({currentBroadcastIndex + 1}/{broadcastQueue.length})
+             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Convalida Eliminazione */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-center items-center p-6 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 space-y-6 shadow-2xl animate-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-red-100 text-[#FF3B30] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={32} />
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black tracking-tight">Conferma Eliminazione</h3>
+              <p className="text-sm text-[#8E8E93]">
+                {deleteConfirm.type === 'single' ? (
+                  <>Sei sicuro di voler eliminare definitivamente <b>{deleteConfirm.user.firstName} {deleteConfirm.user.lastName}</b>?</>
+                ) : (
+                  <>Sei sicuro di voler eliminare definitivamente <b>{deleteConfirm.count}</b> dipendenti selezionati?</>
+                )}
+                <br />Questa operazione non può essere annullata.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="secondary" 
+                fullWidth 
+                onClick={() => setDeleteConfirm(null)}
+                className="!bg-[#F2F2F7] border-none"
+              >
+                Annulla
+              </Button>
+              <Button 
+                variant="danger" 
+                fullWidth 
+                onClick={deleteConfirm.type === 'single' ? executeSingleDelete : executeBatchDelete}
+              >
+                Elimina
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
@@ -321,6 +799,16 @@ Così avrai l’app sempre a portata di mano 👍`;
                   <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Cognome</label>
                   <Input placeholder="Cognome" value={editing.lastName || ''} onChange={e => setEditing({...editing, lastName: e.target.value})} />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Email</label>
+                <Input 
+                  placeholder="mario.rossi@email.it"
+                  type="email"
+                  value={editing.email || ''} 
+                  onChange={e => setEditing({...editing, email: e.target.value})} 
+                />
               </div>
               
               <div className="space-y-1">
@@ -383,42 +871,6 @@ Così avrai l’app sempre a portata di mano 👍`;
             <Button fullWidth onClick={handleSave} disabled={saving} className="mt-4">
               {saving ? <div className="loading-spinner border-white border-t-transparent" /> : 'Salva e Prepara Messaggio'}
             </Button>
-          </div>
-        </div>
-      )}
-
-      {successUser && (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-center items-center p-6">
-          <div className="absolute inset-0 bg-[#007AFF]/95 backdrop-blur-md" />
-          <div className="relative w-full max-w-sm bg-white rounded-[32px] p-8 text-center space-y-6 shadow-2xl animate-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
-              <Check size={40} />
-            </div>
-            
-            <div>
-              <h2 className="text-2xl font-black tracking-tight text-[#1c1c1e]">Dati Salvati!</h2>
-              <p className="text-[#8E8E93] text-sm mt-1">Invia le credenziali a <span className="text-black font-bold">{successUser.firstName}</span></p>
-            </div>
-
-            <div className="bg-[#F2F2F7] p-4 rounded-2xl border border-[#E5E5EA]">
-              <p className="text-[10px] font-bold text-[#8E8E93] uppercase mb-1 tracking-widest">PIN Da Comunicare</p>
-              <p className="text-3xl font-mono font-black tracking-[0.2em] text-[#007AFF]">{successUser.pin}</p>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <Button fullWidth className="!bg-[#25D366] !text-white border-none shadow-lg" onClick={() => sendWhatsApp(successUser)}>
-                <MessageCircle size={20} /> Invia su WhatsApp
-              </Button>
-              <Button fullWidth variant="secondary" className="border border-[#D1D1D6]" onClick={() => copyToClipboard(successUser)}>
-                <Copy size={20} /> Copia Messaggio Testuale
-              </Button>
-              <button 
-                onClick={() => setSuccessUser(null)} 
-                className="w-full text-xs font-bold text-[#8E8E93] uppercase tracking-widest pt-2"
-              >
-                Ho terminato
-              </button>
-            </div>
           </div>
         </div>
       )}

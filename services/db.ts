@@ -27,7 +27,8 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 export interface GlobalSettings {
-  emergency_pin: string;
+  registration_pin: string;
+  registration_open: boolean;
   override_cutoff: boolean;
   manager_phone?: string;
   active_days: string[]; 
@@ -48,7 +49,8 @@ class DB {
 
   async getSettings(): Promise<GlobalSettings> {
     const defaults: GlobalSettings = { 
-      emergency_pin: '0000',
+      registration_pin: '0000',
+      registration_open: true,
       override_cutoff: false, 
       manager_phone: '', 
       active_days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
@@ -59,9 +61,21 @@ class DB {
     };
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      if (error || !data) return defaults;
+      
+      if (error) {
+        console.error("Errore fetch settings:", error);
+        return defaults;
+      }
+      
+      if (!data) {
+        await this.updateSettings(defaults);
+        return defaults;
+      }
+
+      // Mapping: usiamo 'emergency_pin' dal DB per popolare 'registration_pin' nel codice
       return {
-        emergency_pin: data.emergency_pin || defaults.emergency_pin,
+        registration_pin: data.emergency_pin !== undefined ? String(data.emergency_pin) : defaults.registration_pin,
+        registration_open: data.registration_open !== undefined ? !!data.registration_open : defaults.registration_open,
         override_cutoff: !!data.override_cutoff,
         manager_phone: data.manager_phone || '',
         active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days,
@@ -71,25 +85,33 @@ class DB {
         pdf_show_list: data.pdf_show_list !== undefined ? !!data.pdf_show_list : defaults.pdf_show_list
       };
     } catch (err: any) {
+      console.error("Eccezione getSettings:", err);
       return defaults;
     }
   }
 
   async updateSettings(settings: Partial<GlobalSettings>): Promise<void> {
     try {
-      const { error } = await supabase.from('settings').upsert({ id: 'global', ...settings }, { onConflict: 'id' });
+      // Mapping: convertiamo 'registration_pin' in 'emergency_pin' per Supabase
+      const payload: any = { id: 'global', ...settings };
+      
+      if (settings.hasOwnProperty('registration_pin')) {
+        payload.emergency_pin = settings.registration_pin;
+        delete payload.registration_pin; 
+      }
+
+      // Rimuoviamo temporaneamente 'registration_open' se presente, finché l'utente non aggiorna lo schema
+      if (payload.hasOwnProperty('registration_open')) {
+        delete payload.registration_open;
+      }
+      
+      const { error } = await supabase.from('settings').upsert(payload, { onConflict: 'id' });
+      
       if (error) {
         console.error("Errore Supabase updateSettings:", error);
         
-        // Gestione specifica errori di schema
-        if (error.message?.includes("cutoff_time")) {
-          throw new Error("Colonna 'cutoff_time' mancante nella tabella 'settings'.");
-        }
-        if (error.message?.includes("emergency_pin")) {
-          throw new Error("SCHEMA_ERROR: Manca la colonna 'emergency_pin' nella tabella 'settings'. Esegui l'ALTER TABLE in Supabase.");
-        }
-        if (error.message?.includes("pdf_title")) {
-          throw new Error("SCHEMA_ERROR: Mancano le colonne PDF nella tabella 'settings'. Esegui l'ALTER TABLE in Supabase.");
+        if (error.code === '42703') {
+           throw new Error("SCHEMA_ERROR: La tabella 'settings' non ha tutte le colonne necessarie.");
         }
         
         await this.handleError(error, "Salvataggio impostazioni");
@@ -120,55 +142,70 @@ class DB {
     if (error) await this.handleError(error, "Caricamento utenti");
     return (data || []).map(u => ({ 
       id: u.id, firstName: u.first_name, lastName: u.last_name, 
-      phone_e164: u.phone_e164 || '', pin: u.pin, role: u.role, active: u.active 
+      phone_e164: u.phone_e164 || '', email: u.email || '', pin: u.pin, role: u.role, active: u.active 
     }));
   }
 
   async getUserByPin(pin: string): Promise<User | null> {
     try {
-      // 1. Recupera le impostazioni per controllare il PIN Master dinamico
-      const settings = await this.getSettings();
-      
-      // Se emergency_pin non è presente o è nullo (es. fallback), usiamo '0000'
-      const masterPin = settings.emergency_pin || '0000';
-      
-      if (pin === masterPin) {
-        return {
-          id: '00000000-0000-0000-0000-000000000000',
-          firstName: 'Admin',
-          lastName: 'Sistema',
-          phone_e164: '',
-          pin: masterPin,
-          role: Role.ADMIN,
-          active: true
-        };
-      }
-
-      // 2. Altrimenti cerca tra gli utenti standard
       const { data, error } = await supabase.from('users').select('*').eq('pin', pin).eq('active', true).maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
+      if (error || !data) return null;
       return { 
         id: data.id, firstName: data.first_name, lastName: data.last_name, 
-        phone_e164: data.phone_e164 || '', pin: data.pin, role: data.role, active: data.active 
+        phone_e164: data.phone_e164 || '', email: data.email || '', pin: data.pin, role: data.role, active: data.active 
       };
     } catch (err) {
       console.error("Errore durante il recupero dell'utente per PIN:", err);
-      throw err;
+      return null;
     }
   }
 
   async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
-    let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
-    if (excludeUserId) query = query.neq('id', excludeUserId);
-    const { data } = await query.maybeSingle();
-    return !data;
+    try {
+      // 1. Controllo che non sia il PIN di Registrazione
+      const settings = await this.getSettings();
+      if (pin === settings.registration_pin) return false;
+
+      // 2. Controllo che non sia usato da altri utenti attivi
+      let query = supabase.from('users').select('id').eq('pin', pin).eq('active', true);
+      if (excludeUserId) query = query.neq('id', excludeUserId);
+      const { data } = await query.maybeSingle();
+      return !data;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async isEmailAvailable(email: string, excludeUserId?: string): Promise<boolean> {
+    if (!email) return true;
+    try {
+      let query = supabase.from('users').select('id').eq('email', email.trim().toLowerCase());
+      if (excludeUserId) query = query.neq('id', excludeUserId);
+      const { data } = await query.maybeSingle();
+      return !data;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async isPhoneAvailable(phone: string, excludeUserId?: string): Promise<boolean> {
+    if (!phone) return true;
+    try {
+      // Pulizia basica del numero per confronto
+      const cleanPhone = phone.replace(/\s+/g, '');
+      let query = supabase.from('users').select('id').eq('phone_e164', cleanPhone);
+      if (excludeUserId) query = query.neq('id', excludeUserId);
+      const { data } = await query.maybeSingle();
+      return !data;
+    } catch (err) {
+      return false;
+    }
   }
 
   async saveUser(user: Partial<User>): Promise<void> {
     const payload = { 
       first_name: user.firstName, last_name: user.lastName, 
-      phone_e164: user.phone_e164, pin: user.pin, role: user.role, active: user.active 
+      phone_e164: user.phone_e164, email: user.email, pin: user.pin, role: user.role, active: user.active 
     };
     const { error } = user.id 
       ? await supabase.from('users').update(payload).eq('id', user.id)
@@ -176,18 +213,56 @@ class DB {
     if (error) await this.handleError(error, "Salvataggio utente");
   }
 
+  async saveUsersBulk(users: Partial<User>[]): Promise<void> {
+    const payloads = users.map(u => ({
+      first_name: u.firstName,
+      last_name: u.lastName,
+      phone_e164: u.phone_e164,
+      email: u.email,
+      pin: u.pin,
+      role: u.role || Role.WORKER,
+      active: u.active !== false
+    }));
+    const { error } = await supabase.from('users').insert(payloads);
+    if (error) await this.handleError(error, "Salvataggio bulk utenti");
+  }
+
+  async setUsersStatus(ids: string[], active: boolean): Promise<void> {
+    const { error } = await supabase.from('users').update({ active }).in('id', ids);
+    if (error) await this.handleError(error, "Aggiornamento stato bulk");
+  }
+
   async deleteUser(id: string): Promise<void> {
     try {
-      // 1. Elimina gli ordini associati
-      // Nota: In un sistema reale potresti voler conservare gli ordini rendendo user_id NULL,
-      // ma se il cliente chiede l'eliminazione completa procediamo a pulire.
+      console.log(`Eliminazione utente in corso: ${id}`);
+      // 1. Elimina gli ordini associati per evitare vincoli di integrità referenziale
+      // Questo assicura che l'utente possa essere eliminato anche se ha effettuato ordini
+      // Se il database ha ON DELETE CASCADE, questo è ridondante ma sicuro.
       await supabase.from('orders').delete().eq('user_id', id);
 
       // 2. Elimina l'utente
       const { error } = await supabase.from('users').delete().eq('id', id);
       if (error) throw error;
+      
+      console.log(`Utente ${id} eliminato con successo.`);
     } catch (err) {
-      await this.handleError(err, "Cancellazione completa utente");
+      await this.handleError(err, "Cancellazione utente");
+    }
+  }
+
+  async deleteUsersBulk(ids: string[]): Promise<void> {
+    try {
+      console.log(`Eliminazione bulk utenti in corso: ${ids.length} utenti`);
+      // 1. Elimina ordini bulk per evitare vincoli di integrità
+      await supabase.from('orders').delete().in('user_id', ids);
+      
+      // 2. Elimina utenti bulk
+      const { error } = await supabase.from('users').delete().in('id', ids);
+      if (error) throw error;
+
+      console.log(`Eliminazione bulk completata.`);
+    } catch (err) {
+      await this.handleError(err, "Cancellazione bulk utenti");
     }
   }
 

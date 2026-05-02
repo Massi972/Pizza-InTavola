@@ -31,7 +31,16 @@ import {
   User as UserIcon,
   Sliders,
   Filter,
-  Flag
+  Flag,
+  FileDown,
+  FileUp,
+  MoreHorizontal,
+  UserCheck,
+  UserX,
+  Smartphone,
+  UserPlus,
+  ShieldCheck,
+  ArrowLeft
 } from 'lucide-react';
 
 export {
@@ -65,5 +74,14 @@ export {
   UserIcon,
   Sliders,
   Filter,
-  Flag
+  Flag,
+  FileDown,
+  FileUp,
+  MoreHorizontal,
+  UserCheck,
+  UserX,
+  Smartphone,
+  UserPlus,
+  ShieldCheck,
+  ArrowLeft
 };
