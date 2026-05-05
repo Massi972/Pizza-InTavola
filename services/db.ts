@@ -160,6 +160,25 @@ class DB {
     }
   }
 
+  async verifyUserForPinRecovery(email: string, phone: string): Promise<string | null> {
+    try {
+      const cleanPhone = phone.replace(/\s+/g, '');
+      const { data, error } = await supabase
+        .from('users')
+        .select('pin')
+        .eq('email', email.trim().toLowerCase())
+        .eq('phone_e164', cleanPhone)
+        .eq('active', true)
+        .maybeSingle();
+      
+      if (error || !data) return null;
+      return data.pin;
+    } catch (err) {
+      console.error("Errore verifica recupero PIN:", err);
+      return null;
+    }
+  }
+
   async isPinAvailable(pin: string, excludeUserId?: string): Promise<boolean> {
     try {
       // 1. Controllo che non sia il PIN di Registrazione

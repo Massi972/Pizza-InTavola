@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User } from '../types';
-import { PizzaIcon } from '../components/Icons';
+import { PizzaIcon, Smartphone, Mail, X, CheckCircle2, ShieldQuestion } from '../components/Icons';
+import { Button, Input } from '../components/UI';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -12,6 +13,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [showRecovery, setShowRecovery] = useState(false);
+  
+  // Recovery form states
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryPhone, setRecoveryPhone] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveredPin, setRecoveredPin] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState('');
 
   const handleLogin = async () => {
     if (pin.length < 4) return;
@@ -22,6 +32,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
       if (user) {
         onLogin(user);
       } else {
+        const nextAttempts = failedAttempts + 1;
+        setFailedAttempts(nextAttempts);
         setError('PIN non valido');
         setPin('');
       }
@@ -33,6 +45,35 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
     }
   };
 
+  const handleRecovery = async () => {
+    if (!recoveryEmail || !recoveryPhone) {
+      setRecoveryError('Inserisci entrambi i campi');
+      return;
+    }
+    setRecoveryLoading(true);
+    setRecoveryError('');
+    try {
+      const pin = await db.verifyUserForPinRecovery(recoveryEmail, recoveryPhone);
+      if (pin) {
+        setRecoveredPin(pin);
+      } else {
+        setRecoveryError('Dati non corrispondenti. Verifica email e telefono.');
+      }
+    } catch (err) {
+      setRecoveryError('Si è verificato un errore durante il recupero.');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const closeRecovery = () => {
+    setShowRecovery(false);
+    setRecoveredPin(null);
+    setRecoveryEmail('');
+    setRecoveryPhone('');
+    setRecoveryError('');
+  };
+
   const addDigit = (d: string) => {
     if (pin.length < 6) {
       const newPin = pin + d;
@@ -42,7 +83,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7] safe-top safe-bottom">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7] safe-top safe-bottom relative">
       <div className="w-full max-w-xs flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-6">
           <div className="w-24 h-24 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[22%] flex items-center justify-center shadow-2xl">
@@ -55,7 +96,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
         </div>
 
         <div className="w-full flex flex-col items-center">
-          {error && <p className="text-center text-sm font-bold mb-6 text-[#FF3B30] animate-bounce">{error}</p>}
+          {error && <p className="text-center text-xs font-bold mb-6 text-[#FF3B30] animate-bounce">{error}</p>}
           
           <div className="w-full max-w-[280px]">
             <div className="flex justify-center gap-4 mb-10">
@@ -82,10 +123,22 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
               </button>
             </div>
             
-            <button onClick={() => setPin('')} className="w-full mt-8 text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]">Cancella</button>
+            <div className="flex flex-col gap-3 mt-8">
+              <button onClick={() => setPin('')} className="w-full text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]">Cancella</button>
+              
+              {(failedAttempts >= 3 || pin === '') && (
+                <button 
+                  onClick={() => setShowRecovery(true)}
+                  className="w-full text-[10px] font-bold text-indigo-600 uppercase tracking-wider flex items-center justify-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
+                >
+                  <ShieldQuestion size={12} /> Non ricordo il mio PIN
+                </button>
+              )}
+            </div>
+
             <button 
               onClick={onRegister} 
-              className="w-full mt-4 py-3 rounded-2xl bg-white border border-[#D1D1D6] text-xs font-bold text-[#1c1c1e] shadow-sm uppercase tracking-widest active:scale-95 transition-all"
+              className="w-full mt-10 py-3 rounded-2xl bg-white border border-[#D1D1D6] text-xs font-bold text-[#1c1c1e] shadow-sm uppercase tracking-widest active:scale-95 transition-all"
             >
               Non sei in lista? Registrati
             </button>
@@ -96,6 +149,95 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
           </p>
         </div>
       </div>
+
+      {/* MODAL RECUPERO PIN */}
+      {showRecovery && (
+        <div className="fixed inset-0 z-[200] flex flex-col justify-center items-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 space-y-6 shadow-2xl relative">
+            <button onClick={closeRecovery} className="absolute top-6 right-6 p-2 bg-gray-100 rounded-full text-gray-500 active:scale-90 transition-transform">
+              <X size={20} />
+            </button>
+
+            {!recoveredPin ? (
+              <>
+                <div className="space-y-2">
+                  <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-2">
+                    <ShieldQuestion size={28} />
+                  </div>
+                  <h3 className="text-2xl font-black tracking-tight">Recupero Accesso</h3>
+                  <p className="text-sm text-[#8E8E93] font-medium">Per visualizzare il tuo PIN, conferma i tuoi dati personali registrati.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">Email</label>
+                    <Input 
+                      placeholder="la-tua@email.it"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      icon={<Mail size={16} />}
+                      className="!bg-[#F2F2F7] !border-none !rounded-2xl"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">Cellulare (es. +39...)</label>
+                    <Input 
+                      placeholder="+39 333 1234567"
+                      value={recoveryPhone}
+                      onChange={(e) => setRecoveryPhone(e.target.value)}
+                      icon={<Smartphone size={16} />}
+                      className="!bg-[#F2F2F7] !border-none !rounded-2xl"
+                    />
+                  </div>
+
+                  {recoveryError && <p className="text-xs font-bold text-red-500 px-1">{recoveryError}</p>}
+
+                  <Button 
+                    fullWidth 
+                    onClick={handleRecovery}
+                    loading={recoveryLoading}
+                    className="!rounded-2xl !bg-[#007AFF] !h-14 font-black tracking-widest pt-1"
+                  >
+                    VERIFICA IDENTITÀ
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4 space-y-6 animate-in zoom-in duration-300">
+                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 scale-animation">
+                  <CheckCircle2 size={42} />
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black tracking-tight">Identità Verificata</h3>
+                  <div className="bg-[#F2F2F7] p-6 rounded-[28px] mt-4 border-2 border-green-200">
+                    <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-4 text-center">Il tuo PIN Personale è:</p>
+                    <div className="flex justify-center gap-4">
+                      {recoveredPin.split('').map((digit, idx) => (
+                        <span key={idx} className="text-4xl font-black text-[#007AFF] tabular-nums">{digit}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-w-[280px] mx-auto">
+                  <p className="text-xs font-medium text-[#1c1c1e] bg-indigo-50 p-4 rounded-2xl border border-indigo-100 italic leading-relaxed">
+                    "Gentile dipendente, ricordati che il tuo PIN è strettamente personale e non deve essere condiviso con nessuno."
+                  </p>
+                  
+                  <Button 
+                    fullWidth 
+                    onClick={closeRecovery}
+                    className="!rounded-2xl !bg-black text-white font-black tracking-widest pt-1"
+                  >
+                    HO CAPITO, TORNA AL LOGIN
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

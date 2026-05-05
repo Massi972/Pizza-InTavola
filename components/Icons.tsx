@@ -42,7 +42,10 @@ import {
   ShieldCheck,
   ArrowLeft,
   Share,
-  MoreVertical
+  MoreVertical,
+  ShieldQuestion,
+  CheckCircle2,
+  Mail
 } from 'lucide-react';
 
 export {
@@ -87,5 +90,8 @@ export {
   ShieldCheck,
   ArrowLeft,
   Share,
-  MoreVertical
+  MoreVertical,
+  ShieldQuestion,
+  CheckCircle2,
+  Mail
 };

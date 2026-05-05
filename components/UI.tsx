@@ -5,6 +5,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
+  loading?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({ 
@@ -12,6 +13,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary', 
   size = 'md',
   fullWidth = false, 
+  loading = false,
   className = '', 
   ...props 
 }) => {
@@ -33,19 +35,33 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${sizeStyles[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      disabled={loading || props.disabled}
       {...props}
     >
-      {children}
+      {loading ? (
+        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      ) : children}
     </button>
   );
 };
 
-export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => {
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  icon?: React.ReactNode;
+}
+
+export const Input: React.FC<InputProps> = ({ className = '', icon, ...props }) => {
   return (
-    <input 
-      className={`w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] outline-none transition-all ${className}`}
-      {...props}
-    />
+    <div className="relative w-full">
+      {icon && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E8E93]">
+          {icon}
+        </div>
+      )}
+      <input 
+        className={`w-full ${icon ? 'pl-11' : 'px-4'} py-3 rounded-xl bg-white border border-[#C6C6C8] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] outline-none transition-all ${className}`}
+        {...props}
+      />
+    </div>
   );
 };
 
