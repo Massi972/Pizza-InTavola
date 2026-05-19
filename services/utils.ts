@@ -29,7 +29,8 @@ export const getDayAvailability = (
   recurringDays: string[], 
   overrides: DayOverride[] = [],
   manualDayRecord: Day | null,
-  cutoffTimeStr: string = '16:30'
+  cutoffTimeStr: string = '16:30',
+  temporaryOpeningUntil?: number | null
 ) => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day, 12, 0, 0);
@@ -42,9 +43,20 @@ export const getDayAvailability = (
   // 1. PRIORITÀ MASSIMA: CONTROLLO MANUALE (ADMIN ACTION)
   if (manualDayRecord && isToday) {
     if (manualDayRecord.status === DayStatus.OPEN) {
+      // Se c'è un tempo di scadenza, verifica se è passato
+      if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil) {
+        return { 
+          isActive: false, 
+          label: 'CHIUSO (TEMPO SCADUTO)', 
+          colorClass: 'text-red-500 bg-red-50', 
+          isToday, 
+          dayName 
+        };
+      }
+
       return { 
         isActive: true, 
-        label: 'APERTO (FORZATO)', 
+        label: temporaryOpeningUntil ? 'APERTURA TEMPORANEA' : 'APERTO (FORZATO)', 
         colorClass: 'text-green-600 bg-green-100 font-black',
         isToday, 
         dayName 

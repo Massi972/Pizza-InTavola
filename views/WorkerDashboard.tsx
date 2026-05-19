@@ -57,7 +57,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         settings?.active_days || [], 
         overrides, 
         currentDay,
-        settings?.cutoff_time || '16:30'
+        settings?.cutoff_time || '16:30',
+        settings?.temporary_opening_until
     );
   }, [settings, overrides, currentDay]);
 
@@ -117,6 +118,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
   useEffect(() => {
     fetchData();
+    // Polling per aggiornare stato disponibilità in tempo reale
+    const pollId = setInterval(fetchData, 15000); 
+    return () => clearInterval(pollId);
   }, [user.id]);
 
   const handleConfirmOrder = async () => {

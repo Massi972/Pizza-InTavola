@@ -36,6 +36,7 @@ export interface GlobalSettings {
   pdf_title?: string;
   pdf_show_summary?: boolean;
   pdf_show_list?: boolean;
+  temporary_opening_until?: number | null;
 }
 
 class DB {
@@ -82,10 +83,20 @@ class DB {
         cutoff_time: data.cutoff_time || defaults.cutoff_time,
         pdf_title: data.pdf_title || defaults.pdf_title,
         pdf_show_summary: data.pdf_show_summary !== undefined ? !!data.pdf_show_summary : defaults.pdf_show_summary,
-        pdf_show_list: data.pdf_show_list !== undefined ? !!data.pdf_show_list : defaults.pdf_show_list
+        pdf_show_list: data.pdf_show_list !== undefined ? !!data.pdf_show_list : defaults.pdf_show_list,
+        temporary_opening_until: data.temporary_opening_until ?? null
       };
     } catch (err: any) {
       console.error("Eccezione getSettings:", err);
+      // Se l'errore è dovuto a una colonna mancante in SELECT *, proviamo a caricare i dati base
+      if (err.code === '42703') {
+        try {
+          const { data } = await supabase.from('settings').select('id, master_code, override_cutoff, cutoff_time').eq('id', 'global').maybeSingle();
+          if (data) {
+             return { ...defaults, override_cutoff: !!data.override_cutoff, cutoff_time: data.cutoff_time || defaults.cutoff_time };
+          }
+        } catch {}
+      }
       return defaults;
     }
   }
@@ -99,11 +110,6 @@ class DB {
         payload.emergency_pin = settings.registration_pin;
         delete payload.registration_pin; 
       }
-
-      // Rimuoviamo temporaneamente 'registration_open' se presente, finché l'utente non aggiorna lo schema
-      if (payload.hasOwnProperty('registration_open')) {
-        delete payload.registration_open;
-      }
       
       const { error } = await supabase.from('settings').upsert(payload, { onConflict: 'id' });
       
@@ -111,7 +117,19 @@ class DB {
         console.error("Errore Supabase updateSettings:", error);
         
         if (error.code === '42703') {
-           throw new Error("SCHEMA_ERROR: La tabella 'settings' non ha tutte le colonne necessarie.");
+           // Se fallisce per una colonna mancante, riproviamo rimuovendo le colonne nuove
+           const fallbackPayload = { ...payload };
+           delete fallbackPayload.temporary_opening_until;
+           delete fallbackPayload.registration_open;
+           delete fallbackPayload.pdf_title;
+           delete fallbackPayload.pdf_show_summary;
+           delete fallbackPayload.pdf_show_list;
+           
+           const { error: retryError } = await supabase.from('settings').upsert(fallbackPayload, { onConflict: 'id' });
+           if (!retryError) {
+             throw new Error("SCHEMA_ERROR: Alcune nuove funzionalità (come l'apertura temporanea) richiedono un aggiornamento del database.");
+           }
+           throw retryError;
         }
         
         await this.handleError(error, "Salvataggio impostazioni");

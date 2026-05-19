@@ -102,7 +102,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       settings.active_days,
       overrides,
       currentDay,
-      settings.cutoff_time
+      settings.cutoff_time,
+      settings.temporary_opening_until
     );
   }, [settings, overrides, currentDay]);
 
@@ -144,13 +145,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
     }
   };
 
+  const [autoCloseTimer, setAutoCloseTimer] = useState<number | null>(null);
+  const autoCloseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Gestione timer di chiusura automatica persistente
+  useEffect(() => {
+    if (autoCloseIntervalRef.current) clearInterval(autoCloseIntervalRef.current);
+    
+    if (settings?.temporary_opening_until && currentDay?.status === 'OPEN') {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((settings.temporary_opening_until - now) / 1000));
+      
+      if (remaining > 0) {
+        setAutoCloseTimer(remaining);
+        autoCloseIntervalRef.current = setInterval(() => {
+          setAutoCloseTimer(prev => {
+            if (prev === null || prev <= 1) {
+              if (autoCloseIntervalRef.current) clearInterval(autoCloseIntervalRef.current);
+              handleToggleDay('close');
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        // Tempo scaduto ma giornata ancora aperta: chiudi
+        handleToggleDay('close');
+      }
+    } else {
+      setAutoCloseTimer(null);
+    }
+
+    return () => {
+      if (autoCloseIntervalRef.current) clearInterval(autoCloseIntervalRef.current);
+    };
+  }, [settings?.temporary_opening_until, currentDay?.status]);
+
   const handleToggleDay = async (action: 'open' | 'close') => {
     setActionLoading(true);
     try {
       if (action === 'open') {
-        await db.openDay();
+        const timeoutMs = 120000; // 2 minuti
+        const until = Date.now() + timeoutMs;
+        
+        await Promise.all([
+          db.openDay(),
+          db.updateSettings({ temporary_opening_until: until })
+        ]);
       } else {
-        await db.closeDay();
+        await Promise.all([
+          db.closeDay(),
+          db.updateSettings({ temporary_opening_until: null })
+        ]);
       }
       await fetchData();
     } catch (err: any) {
@@ -159,6 +205,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       setActionLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+    // Polling per sincronizzare lo stato tra più admin/dispositivi
+    const pollId = setInterval(fetchData, 10000); 
+    return () => clearInterval(pollId);
+  }, []);
 
   const handleDownloadReport = () => {
     if (!currentDay || orders.length === 0) {
@@ -190,6 +243,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
         </div>
       )}
 
+      {autoCloseTimer !== null && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-red-600 text-white px-4 py-2 rounded-full text-[10px] font-black animate-in fade-in zoom-in duration-300 flex items-center gap-2 shadow-xl border-2 border-white">
+          <ClockIcon size={14} className="animate-pulse" />
+          APERTURA TEMPORANEA: CHIUSURA TRA {Math.floor(autoCloseTimer / 60)}:{(autoCloseTimer % 60).toString().padStart(2, '0')}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Banner Errore Database */}
         {error && (
@@ -203,9 +263,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
               <button onClick={() => setError(null)} className="p-1"><X size={16} /></button>
             </div>
             
+            {isAdmin && error.message.includes('SCHEMA_ERROR') && (
+              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                <p className="text-[10px] font-bold uppercase text-indigo-800 mb-1">Esegui questo comando per AGGIORNARE il database (senza perdere dati):</p>
+                <code className="block bg-black text-white p-2 rounded text-[9px] font-mono whitespace-pre-wrap mb-2">
+{`ALTER TABLE settings 
+ADD COLUMN IF NOT EXISTS temporary_opening_until BIGINT,
+ADD COLUMN IF NOT EXISTS registration_open BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS pdf_title TEXT DEFAULT 'IN TAVOLA - PIZZA STAFF',
+ADD COLUMN IF NOT EXISTS pdf_show_summary BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS pdf_show_list BOOLEAN DEFAULT true;`}
+                </code>
+                <p className="text-[9px] text-indigo-600 italic">Vai su Supabase → SQL Editor → Nuovo Progetto → incolla e premi RUN</p>
+              </div>
+            )}
+
             {isAdmin && (error.message.includes('pizzas') || error.message.includes('settings') || error.message.includes('users') || error.message.includes('orders')) && (
               <div className="p-3 bg-white/50 rounded-lg border border-red-200">
-                <p className="text-[10px] font-bold uppercase text-red-800 mb-1">Copia ed esegui in Supabase SQL Editor per creare le tabelle:</p>
+                <p className="text-[10px] font-bold uppercase text-red-800 mb-1">OPPURE: Reset totale (ATTENZIONE: cancella tutto):</p>
                 <code className="block bg-black text-white p-2 rounded text-[9px] font-mono break-all whitespace-pre-wrap">
 {`-- 1. Pulizia totale (rimuove sia tabelle che viste esistenti in modo sicuro)
 DO $$ 
@@ -230,7 +305,8 @@ DO $$
   override_cutoff BOOLEAN DEFAULT false,
   manager_phone TEXT,
   active_days TEXT[] DEFAULT ARRAY['MON', 'TUE', 'WED', 'THU', 'FRI'],
-  cutoff_time TEXT DEFAULT '16:30'
+  cutoff_time TEXT DEFAULT '16:30',
+  temporary_opening_until BIGINT
  );
  INSERT INTO settings (id) VALUES ('global');
  
