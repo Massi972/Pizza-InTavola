@@ -467,6 +467,24 @@ class DB {
     await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('days').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   }
+
+  async getUserRecentOrders(userId: string, limit: number = 20): Promise<Order[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, days(date)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) return [];
+    return (data || []).map(o => ({ 
+      id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
+      addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
+      removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],
+      flagIds: Array.isArray(o.flag_ids) ? o.flag_ids : [],
+      note: o.note || '', createdAt: o.created_at, updatedAt: o.updated_at 
+    }));
+  }
 }
 
 export const db = new DB();

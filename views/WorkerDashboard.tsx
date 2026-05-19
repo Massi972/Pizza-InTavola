@@ -15,7 +15,10 @@ import {
   UserIcon,
   LogOut,
   Sliders,
-  Flag
+  Flag,
+  History,
+  Star,
+  RefreshCw
 } from '../components/Icons';
 import { getDayAvailability, getTodayDateString } from '../services/utils';
 import { SLOT_TIMES } from '../constants';
@@ -26,7 +29,7 @@ interface WorkerDashboardProps {
   onBackToAdmin?: () => void;
 }
 
-type ViewState = 'menu' | 'settings';
+type ViewState = 'menu' | 'history' | 'settings';
 
 const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBackToAdmin }) => {
   const [activeTab, setActiveTab] = useState<ViewState>('menu');
@@ -37,6 +40,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [overrides, setOverrides] = useState<DayOverride[]>([]);
   const [myOrder, setMyOrder] = useState<Order | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [favoriteOrder, setFavoriteOrder] = useState<Partial<Order> | null>(null);
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
   const [slot, setSlot] = useState<SlotTime>('18:00');
@@ -93,14 +98,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [pizzaList, modList, flagList, day, order, globalSettings, dayOverrides] = await Promise.all([
+      const [pizzaList, modList, flagList, day, order, globalSettings, dayOverrides, history] = await Promise.all([
         db.getPizzas(),
         db.getModifications(),
         db.getPizzaFlags(),
         db.getCurrentDay(),
         db.getUserOrderToday(user.id),
         db.getSettings(),
-        db.getOverrides()
+        db.getOverrides(),
+        db.getUserRecentOrders(user.id, 20)
       ]);
       setPizzas(pizzaList.filter(p => p.active));
       setModifications(modList || []);
@@ -109,11 +115,53 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       setMyOrder(order);
       setSettings(globalSettings);
       setOverrides(dayOverrides);
+      setRecentOrders(history);
+
+      // Calcola Pizza Preferita (combinazione più frequente negli ultimi ordini)
+      if (history.length > 0) {
+        const counts: Record<string, { count: number, order: Order }> = {};
+        history.forEach(o => {
+          // Creiamo una chiave univoca per la combinazione pizza + orario + variazioni
+          const modsKey = [...(o.addModificationIds || [])].sort().join(',');
+          const remsKey = [...(o.removeModificationIds || [])].sort().join(',');
+          const flagsKey = [...(o.flagIds || [])].sort().join(',');
+          const key = `${o.pizzaId}|${o.slotTime}|${modsKey}|${remsKey}|${flagsKey}`;
+          
+          if (!counts[key]) counts[key] = { count: 0, order: o };
+          counts[key].count++;
+        });
+
+        const favorite = Object.values(counts).sort((a, b) => b.count - a.count)[0];
+        if (favorite && favorite.count >= 2) { 
+           setFavoriteOrder({
+             pizzaId: favorite.order.pizzaId,
+             slotTime: favorite.order.slotTime,
+             addModificationIds: favorite.order.addModificationIds,
+             removeModificationIds: favorite.order.removeModificationIds,
+             flagIds: favorite.order.flagIds
+           });
+        } else {
+          setFavoriteOrder(null);
+        }
+      }
     } catch (err: any) {
       setErrorMessage(err.message || "Errore caricamento dati");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFavoriteOrder = async () => {
+    if (!favoriteOrder || !canOrder) return;
+    const pizza = pizzas.find(p => p.id === favoriteOrder.pizzaId);
+    if (!pizza) return;
+
+    setSelectedPizza(pizza);
+    setSlot(favoriteOrder.slotTime || '18:00');
+    setSelectedAddIds(favoriteOrder.addModificationIds || []);
+    setSelectedRemoveIds(favoriteOrder.removeModificationIds || []);
+    setSelectedFlagIds(favoriteOrder.flagIds || []);
+    setShowRecap(true);
   };
 
   useEffect(() => {
@@ -174,6 +222,26 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
           <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
         </div>
+
+        {favoriteOrder && !myOrder && canOrder && (
+          <Card 
+            className="p-4 border-2 border-amber-200 bg-amber-50/50 cursor-pointer active:scale-95 transition-all shadow-sm"
+            onClick={handleFavoriteOrder}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                  <Star size={20} fill="currentColor" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest px-1 bg-amber-100/50 rounded inline-block">Pizza Preferita</p>
+                  <h3 className="text-sm font-black text-[#1c1c1e] mt-0.5">{pizzas.find(p => p.id === favoriteOrder.pizzaId)?.name}</h3>
+                </div>
+              </div>
+              <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase">Ordina Volo</div>
+            </div>
+          </Card>
+        )}
 
         {errorMessage && (errorMessage.includes('pizzas') || errorMessage.includes('settings')) && (
           <div className="bg-red-50 p-4 rounded-2xl border border-red-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
@@ -267,10 +335,76 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
     );
   };
 
+  const renderHistory = () => (
+    <div className="space-y-6 animate-in slide-in-from-right duration-300">
+      <div className="pt-2 pb-1 text-center">
+        <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight leading-tight">Cronologia</h2>
+        <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mt-1">I tuoi ordini recenti</p>
+      </div>
+
+      {recentOrders.length === 0 ? (
+        <div className="py-20 text-center space-y-4">
+           <div className="w-20 h-20 bg-[#F2F2F7] rounded-full flex items-center justify-center mx-auto text-[#8E8E93] opacity-30">
+             <History size={40} />
+           </div>
+           <div>
+             <p className="text-sm text-[#8E8E93] font-bold">Ancora nessun ordine...</p>
+             <p className="text-[10px] text-[#C6C6C8] font-medium mt-1">Gli ordini che farai appariranno qui.</p>
+           </div>
+        </div>
+      ) : (
+        <div className="space-y-3 pb-24">
+          {recentOrders.map(o => {
+            const pizza = pizzas.find(p => p.id === o.pizzaId);
+            const dateObj = o.createdAt ? new Date(o.createdAt) : null;
+            const dateStr = dateObj ? dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '--';
+            
+            return (
+              <Card key={o.id} className="p-4 flex items-center justify-between gap-4 border border-transparent shadow-sm">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[9px] font-black text-[#8E8E93] uppercase bg-[#F2F2F7] px-1.5 py-0.5 rounded cursor-default">{dateStr}</span>
+                    <span className="text-[9px] font-black text-[#007AFF] uppercase bg-blue-50 px-1.5 py-0.5 rounded cursor-default">{o.slotTime}</span>
+                  </div>
+                  <h4 className="text-sm font-black text-[#1c1c1e] truncate">{pizza?.name || 'Pizza'}</h4>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {o.addModificationIds?.map(id => {
+                      const m = modifications.find(mod => mod.id === id);
+                      return m ? <span key={id} className="text-[8px] font-bold bg-green-50 text-green-600 px-1 rounded">+{m.name}</span> : null;
+                    })}
+                    {o.removeModificationIds?.map(id => {
+                      const m = modifications.find(mod => mod.id === id);
+                      return m ? <span key={id} className="text-[8px] font-bold bg-red-50 text-red-600 px-1 rounded">-{m.name}</span> : null;
+                    })}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    if(!canOrder) return;
+                    setSelectedPizza(pizza || null);
+                    setSlot(o.slotTime);
+                    setSelectedAddIds(o.addModificationIds || []);
+                    setSelectedRemoveIds(o.removeModificationIds || []);
+                    setSelectedFlagIds(o.flagIds || []);
+                    setShowRecap(true);
+                  }}
+                  className={`p-3 rounded-2xl transition-all ${canOrder ? 'bg-[#007AFF] text-white active:scale-90 shadow-md shadow-blue-200' : 'bg-gray-100 text-gray-400 opacity-40 cursor-not-allowed'}`}
+                  title="Ripeti Ordine"
+                >
+                  <RefreshCw size={20} />
+                </button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   const isManagement = user.role === Role.ADMIN || user.role === Role.SUPERVISOR;
 
   return (
-    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : 'Profilo'} onBack={activeTab === 'settings' ? () => setActiveTab('menu') : undefined}>
+    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : activeTab === 'history' ? 'Cronologia' : 'Profilo'} onBack={activeTab !== 'menu' ? () => setActiveTab('menu') : undefined}>
       {showSuccess && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 backdrop-blur-2xl animate-in fade-in duration-300">
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
@@ -291,7 +425,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         </div>
       )}
 
-      {activeTab === 'menu' ? renderMenu() : (
+      {activeTab === 'menu' ? renderMenu() : activeTab === 'history' ? renderHistory() : (
         <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-right duration-300">
            <Card className="p-6 text-center bg-white shadow-md">
             <div className="w-16 h-16 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white mx-auto shadow-md mb-4"><UserIcon size={32} /></div>
@@ -324,18 +458,25 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 ios-blur border-t border-[#C6C6C8] pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-center z-40">
-        <div className="w-full max-w-lg px-10 flex justify-between items-center">
-          <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'menu' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
+        <div className="w-full max-w-lg px-6 flex justify-between items-center">
+          <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'menu' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
             <PizzaIcon size={22} />
             <span className="text-[9px] font-black uppercase tracking-tighter">Menu</span>
           </button>
+          
+          <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'history' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
+            <History size={22} />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Ordini</span>
+          </button>
+
           {isManagement && onBackToAdmin && (
-             <button onClick={onBackToAdmin} className="flex flex-col items-center gap-1 text-[#5856D6] active:scale-105 transition-transform">
+             <button onClick={onBackToAdmin} className="flex flex-col items-center gap-1 text-[#5856D6] active:scale-105 transition-transform flex-1">
                <Sliders size={22} />
                <span className="text-[9px] font-black uppercase tracking-tighter">Admin</span>
              </button>
           )}
-          <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'settings' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
+
+          <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'settings' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
             <Settings size={22} />
             <span className="text-[9px] font-black uppercase tracking-tighter">Profilo</span>
           </button>

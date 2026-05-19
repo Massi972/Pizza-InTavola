@@ -45,7 +45,8 @@ import {
   MoreVertical,
   ShieldQuestion,
   CheckCircle2,
-  Mail
+  Mail,
+  Star
 } from 'lucide-react';
 
 export {
@@ -93,5 +94,6 @@ export {
   MoreVertical,
   ShieldQuestion,
   CheckCircle2,
-  Mail
+  Mail,
+  Star
 };
