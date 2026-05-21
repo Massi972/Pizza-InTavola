@@ -87,9 +87,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7] safe-top safe-bottom relative animate-in fade-in duration-300">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
-        <LanguageSwitcher />
-      </div>
 
       <div className="w-full max-w-xs flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-6 mt-8">
@@ -169,6 +166,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
             {language === 'ar' && "لدواعي الأمن، تنتهي الجلسة عند إغلاق التطبيق."}
             {language === 'ur' && "سیکیورٹی کے لیے، جب آپ ایپ بند کرتے ہیں تو سیشن ختم ہو جاتا ہے۔"}
           </p>
+          
+          <div className="mt-8 flex justify-center pb-2">
+            <LanguageSwitcher direction="up" align="center" />
+          </div>
         </div>
       </div>
 

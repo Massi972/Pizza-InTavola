@@ -139,7 +139,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
     <Layout title={t('registerTitle')} onBack={onBack}>
       <div className="space-y-6 py-4">
         <div className="flex justify-center">
-          <LanguageSwitcher />
+          <LanguageSwitcher direction="down" align="center" />
         </div>
         {step === 1 && (
           <div className="space-y-6 animate-in slide-in-from-right duration-300">

@@ -229,7 +229,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             <p className="text-sm font-bold text-[#8E8E93] mt-1">{t('choosePizzaToday')}</p>
           </div>
           <div className="shrink-0">
-            <LanguageSwitcher />
+            <LanguageSwitcher direction="down" align="right" />
           </div>
         </div>
 
