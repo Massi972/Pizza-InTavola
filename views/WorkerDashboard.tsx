@@ -3,6 +3,8 @@ import { User, Pizza, PizzaFlag, Order, SlotTime, Modification, Role, DayOverrid
 import { db, GlobalSettings } from '../services/db';
 import { Layout } from '../components/Layout';
 import { Card, Button, SegmentedControl, Input } from '../components/UI';
+import { useTranslation } from '../services/i18n';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { 
   PizzaIcon, 
   ClockIcon, 
@@ -32,6 +34,7 @@ interface WorkerDashboardProps {
 type ViewState = 'menu' | 'history' | 'settings';
 
 const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBackToAdmin }) => {
+  const { t, isRtl, language } = useTranslation();
   const [activeTab, setActiveTab] = useState<ViewState>('menu');
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [modifications, setModifications] = useState<Modification[]>([]);
@@ -218,9 +221,16 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
     return (
       <div className="space-y-5">
-        <div className="pt-2 pb-1">
-          <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">Ciao {user.firstName}!</h1>
-          <p className="text-base font-bold text-[#8E8E93] mt-1">Scegli la tua pizza di oggi.</p>
+        <div className="flex justify-between items-center pt-2 pb-1 gap-4">
+          <div>
+            <h1 className="text-[28px] font-black text-[#1c1c1e] tracking-tight leading-[1.1]">
+              {t('helloUser', { name: user.firstName })}
+            </h1>
+            <p className="text-sm font-bold text-[#8E8E93] mt-1">{t('choosePizzaToday')}</p>
+          </div>
+          <div className="shrink-0">
+            <LanguageSwitcher />
+          </div>
         </div>
 
         {favoriteOrder && !myOrder && canOrder && (
@@ -234,11 +244,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   <Star size={20} fill="currentColor" />
                 </div>
                 <div>
-                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest px-1 bg-amber-100/50 rounded inline-block">Pizza Preferita</p>
+                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest px-1 bg-amber-100/50 rounded inline-block">{t('favOrderTitle')}</p>
                   <h3 className="text-sm font-black text-[#1c1c1e] mt-0.5">{pizzas.find(p => p.id === favoriteOrder.pizzaId)?.name}</h3>
                 </div>
               </div>
-              <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase">Ordina Volo</div>
+              <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase">{t('favOrderBtn')}</div>
             </div>
           </Card>
         )}
@@ -248,8 +258,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             <div className="flex items-start gap-3 text-[#FF3B30]">
               <AlertCircle size={20} className="shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-bold">Configurazione Database Necessaria</p>
-                <p className="text-xs opacity-80">Le tabelle del database non sono state trovate. Contatta l'amministratore per eseguire lo script di setup in Supabase.</p>
+                <p className="text-sm font-bold">{t('dbConfigNeeded')}</p>
+                <p className="text-xs opacity-80">{t('dbConfigDesc')}</p>
               </div>
             </div>
           </div>
@@ -259,19 +269,21 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <div className="bg-[#FF3B30] text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg">
             <div className="p-2 bg-white/20 rounded-full shrink-0"><Lock size={20} /></div>
             <div className="flex-1">
-              <p className="font-black text-sm tracking-tight">Servizio non attivo</p>
+              <p className="font-black text-sm tracking-tight">{t('serviceNotActive')}</p>
               <p className="text-[10px] font-medium opacity-90 leading-tight">
-                {availability.label.includes('OLTRE') ? `Gli ordini sono terminati alle ${settings?.cutoff_time}.` : "Servizio non disponibile per oggi."}
+                {availability.label.includes('OLTRE') 
+                  ? t('ordersEndedAt', { time: settings?.cutoff_time || '16:30' }) 
+                  : t('serviceNotAvailableToday')}
               </p>
             </div>
           </div>
         )}
 
         {myOrder && !selectedPizza && !isEditing && (
-          <Card className={`p-5 border-2 max-w-2xl mx-auto ${availability.isActive ? 'border-[#34C759] shadow-lg' : 'border-[#C6C6C8] opacity-80 grayscale'}`}>
+          <Card className={`p-5 border-2 max-w-2xl mx-auto ${availability.isActive ? 'border-[#34C759]' : 'border-[#C6C6C8] opacity-80 grayscale'}`}>
             <div className="flex justify-between items-start gap-3 mb-5">
               <div className="flex-1">
-                <p className={`text-[9px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-[0.2em] mb-1.5`}>Il tuo ordine attuale</p>
+                <p className={`text-[9px] font-black ${availability.isActive ? 'text-[#34C759]' : 'text-[#8E8E93]'} uppercase tracking-[0.2em] mb-1.5`}>{t('currentOrderTitle')}</p>
                 <h2 className="text-xl font-black truncate">{pizzas.find(p => p.id === myOrder.pizzaId)?.name || 'Pizza'}</h2>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {myOrder.addModificationIds?.map(id => {
@@ -304,7 +316,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   setSelectedFlagIds(myOrder.flagIds || []);
                   setIsEditing(true); 
                 }
-              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">Cambia Scelta</Button>
+              }} variant="secondary" fullWidth className="!bg-[#F2F2F7] !py-3">{t('changeSelectionBtn')}</Button>
             )}
           </Card>
         )}
@@ -313,7 +325,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <div className={`space-y-5 ${!canOrder ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93]" size={16} />
-              <Input placeholder="Cerca pizza..." className="pl-10 !py-3 !rounded-xl border-none shadow-sm bg-white" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder={t('searchPizzaPlaceholder')} className="pl-10 !py-3 !rounded-xl border-none shadow-sm bg-white" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
               {filteredPizzas.map(pizza => (
@@ -324,7 +336,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                   </div>
                   <p className="text-[11px] text-[#8E8E93] leading-snug flex-1 italic line-clamp-2">{pizza.ingredients?.join(', ')}</p>
                   <div className="mt-3 pt-2 border-t border-[#F2F2F7] flex justify-end">
-                    <span className="text-[#007AFF] text-[9px] font-black uppercase tracking-widest">Scegli</span>
+                    <span className="text-[#007AFF] text-[9px] font-black uppercase tracking-widest">{t('chooseLabel')}</span>
                   </div>
                 </Card>
               ))}
@@ -338,8 +350,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const renderHistory = () => (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
       <div className="pt-2 pb-1 text-center">
-        <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight leading-tight">Cronologia</h2>
-        <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mt-1">I tuoi ordini recenti</p>
+        <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight leading-tight">{t('historyTitle')}</h2>
+        <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-widest mt-1">{t('historySubtitle')}</p>
       </div>
 
       {recentOrders.length === 0 ? (
@@ -348,8 +360,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
              <History size={40} />
            </div>
            <div>
-             <p className="text-sm text-[#8E8E93] font-bold">Ancora nessun ordine...</p>
-             <p className="text-[10px] text-[#C6C6C8] font-medium mt-1">Gli ordini che farai appariranno qui.</p>
+             <p className="text-sm text-[#8E8E93] font-bold">{t('noOrdersYet')}</p>
+             <p className="text-[10px] text-[#C6C6C8] font-medium mt-1">{t('noOrdersDesc')}</p>
            </div>
         </div>
       ) : (
@@ -404,15 +416,15 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const isManagement = user.role === Role.ADMIN || user.role === Role.SUPERVISOR;
 
   return (
-    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : activeTab === 'history' ? 'Cronologia' : 'Profilo'} onBack={activeTab !== 'menu' ? () => setActiveTab('menu') : undefined}>
+    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : activeTab === 'history' ? t('historyTitle') : t('profileTitle')} onBack={activeTab !== 'menu' ? () => setActiveTab('menu') : undefined}>
       {showSuccess && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 backdrop-blur-2xl animate-in fade-in duration-300">
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
-          <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight">Ordine Inviato!</h2>
-          <p className="text-[#8E8E93] font-bold mt-1.5 uppercase tracking-widest text-[9px] mb-8 text-center">Troverai la pizza pronta all'orario scelto.</p>
+          <h2 className="text-2xl font-black text-[#1c1c1e] tracking-tight">{t('orderSentTitle')}</h2>
+          <p className="text-[#8E8E93] font-bold mt-1.5 uppercase tracking-widest text-[9px] mb-8 text-center">{t('orderSentDesc')}</p>
           <div className="w-full max-w-xs space-y-3">
-            <Button fullWidth onClick={() => { setShowSuccess(false); setActiveTab('menu'); }}>Torna al Menu</Button>
-            <Button fullWidth variant="ghost" onClick={onLogout}>Esci dall'App</Button>
+            <Button fullWidth onClick={() => { setShowSuccess(false); setActiveTab('menu'); }}>{t('myOrderBtn')}</Button>
+            <Button fullWidth variant="ghost" onClick={onLogout}>{t('logoutBtn')}</Button>
           </div>
         </div>
       )}
@@ -433,22 +445,34 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             <p className="text-[9px] font-black text-[#007AFF] uppercase tracking-widest mt-1 bg-[#F2F2F7] inline-block px-3 py-0.5 rounded-full">{user.role}</p>
           </Card>
 
-          <div className="grid grid-cols-1 gap-5">
+           <div className="grid grid-cols-1 gap-5">
             <section className="space-y-2">
-              <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Account</p>
+              <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">
+                {language === 'it' && "Account"}
+                {language === 'en' && "Account Settings"}
+                {language === 'es' && "Ajustes de Cuenta"}
+                {language === 'ar' && "إعدادات الحساب"}
+                {language === 'ur' && "اکاؤنٹ کی ترتیبات"}
+              </p>
               <Card className="divide-y divide-[#F2F2F7]">
                 {isManagement && onBackToAdmin && (
                   <button onClick={onBackToAdmin} className="w-full p-4 flex justify-between items-center text-[#5856D6] font-bold active:bg-[#F2F2F7] transition-all">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-[#F2F2F7] text-[#5856D6] rounded-lg"><Sliders size={16} /></div>
-                      <span className="text-xs">Torna al Gestionale</span>
+                      <span className="text-xs">
+                        {language === 'it' && "Torna al Gestionale"}
+                        {language === 'en' && "Back to Admin Dashboard"}
+                        {language === 'es' && "Volver al Panel de Admin"}
+                        {language === 'ar' && "العودة للوحة التحكم"}
+                        {language === 'ur' && "ایڈمن پینل پر واپس جائیں"}
+                      </span>
                     </div>
                   </button>
                 )}
                 <button onClick={onLogout} className="w-full p-4 flex justify-between items-center text-[#FF3B30] font-bold active:bg-red-50 transition-all">
                    <div className="flex items-center gap-3">
                       <div className="p-1.5 bg-red-50 text-[#FF3B30] rounded-lg"><LogOut size={16} /></div>
-                      <span className="text-xs">Esci dall'app</span>
+                      <span className="text-xs">{t('logoutBtn')}</span>
                     </div>
                 </button>
               </Card>
@@ -461,12 +485,18 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         <div className="w-full max-w-lg px-6 flex justify-between items-center">
           <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'menu' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
             <PizzaIcon size={22} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Menu</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">
+              {language === 'it' && "Menu"}
+              {language === 'en' && "Menu"}
+              {language === 'es' && "Menú"}
+              {language === 'ar' && "القائمة"}
+              {language === 'ur' && "مینو"}
+            </span>
           </button>
           
           <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'history' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
             <History size={22} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Ordini</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">{t('historyTab')}</span>
           </button>
 
           {isManagement && onBackToAdmin && (
@@ -500,17 +530,17 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             </div>
             <div className="space-y-5">
               <section className="space-y-2">
-                <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">Orario di ritiro</p>
+                <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">{t('pickupTimeLabel')}</p>
                 <div className="bg-white p-1.5 rounded-xl shadow-sm"><SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} /></div>
               </section>
               <div className="space-y-5">
                 <section className="space-y-2">
                   <div className="flex justify-between items-center px-1">
-                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Aggiungi (+)</p>
-                    <p className="text-[8px] font-bold text-[#007AFF] uppercase">Max 2 variazioni totali</p>
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">{t('addLabel')}</p>
+                    <p className="text-[8px] font-bold text-[#007AFF] uppercase">{t('maxModsError')}</p>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
-                    {addOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna aggiunta</p>}
+                    {addOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">{t('noAdditions')}</p>}
                     {addOptions.map(opt => {
                       const isSelected = selectedAddIds.includes(opt.id);
                       const limitReached = !isSelected && (selectedAddIds.length + selectedRemoveIds.length) >= 2;
@@ -531,10 +561,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </section>
                 <section className="space-y-2">
                   <div className="flex justify-between items-center px-1">
-                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">Togli (-)</p>
+                    <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest">{t('removeLabel')}</p>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
-                    {removeOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">Nessuna rimozione</p>}
+                    {removeOptions.length === 0 && <p className="p-3 text-[10px] text-center text-gray-400 italic">{t('noRemovals')}</p>}
                     {removeOptions.map(opt => {
                       const isSelected = selectedRemoveIds.includes(opt.id);
                       const limitReached = !isSelected && (selectedAddIds.length + selectedRemoveIds.length) >= 2;
@@ -555,7 +585,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
                 </section>
                 {pizzaFlags.length > 0 && (
                   <section className="space-y-2">
-                    <p className="text-[9px] font-black text-[#5856D6] uppercase tracking-widest pl-1">Opzioni Speciali (Extra)</p>
+                    <p className="text-[9px] font-black text-[#5856D6] uppercase tracking-widest pl-1">{t('extraOptionsLabel')}</p>
                     <div className="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-[#F2F2F7]">
                       {pizzaFlags.map(flag => (
                         <button key={flag.id} onClick={() => handleToggleFlag(flag.id)} className="w-full flex items-center justify-between p-3 active:bg-[#F2F2F7] transition-colors text-indigo-700">
@@ -571,13 +601,19 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
               <div className="pt-2 flex flex-col gap-2">
                 {errorMessage && <p className="text-[10px] text-[#FF3B30] font-black mb-2 text-center uppercase tracking-tighter">{errorMessage}</p>}
                 <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting} className="!py-4 !text-base">
-                  {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'Conferma Ordine'}
+                  {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : (
+                    language === 'it' ? "Conferma Ordine" :
+                    language === 'en' ? "Confirm Order" :
+                    language === 'es' ? "Confirmar Pedido" :
+                    language === 'ar' ? "تأكيد الطلب" :
+                    language === 'ur' ? "آرڈر کی تصدیق کریں" : "Conferma Ordine"
+                  )}
                 </Button>
                 <button 
                   onClick={() => !submitting && setSelectedPizza(null)}
                   className="w-full py-2 text-[10px] font-black text-[#8E8E93] uppercase tracking-widest"
                 >
-                  Annulla e torna al menu
+                  {t('cancelBtn')}
                 </button>
               </div>
             </div>
@@ -590,21 +626,45 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => !submitting && setShowRecap(false)} />
           <Card className="relative w-full max-w-xs p-5 space-y-5 shadow-2xl bg-white rounded-[24px]">
             <div className="text-center space-y-1">
-              <h3 className="text-lg font-black text-[#1c1c1e] tracking-tight">Riepilogo</h3>
-              <p className="text-[9px] text-[#8E8E93] font-bold uppercase tracking-widest">Verifica prima di inviare</p>
+              <h3 className="text-lg font-black text-[#1c1c1e] tracking-tight">
+                {language === 'it' && "Riepilogo"}
+                {language === 'en' && "Recap Summary"}
+                {language === 'es' && "Resumen de Pedido"}
+                {language === 'ar' && "ملخص الطلب"}
+                {language === 'ur' && "آرڈر کا خلاصہ"}
+              </h3>
+              <p className="text-[9px] text-[#8E8E93] font-bold uppercase tracking-widest">
+                {language === 'it' && "Verifica prima di inviare"}
+                {language === 'en' && "Verify before submitting"}
+                {language === 'es' && "Verifica antes de enviar"}
+                {language === 'ar' && "تحقق قبل الإرسال"}
+                {language === 'ur' && "جمع کرانے سے پہلے تصدیق کریں"}
+              </p>
             </div>
 
             <div className="bg-[#F2F2F7] p-4 rounded-xl space-y-3">
                 <div className="flex flex-col">
-                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">La tua pizza</p>
+                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">
+                    {language === 'it' && "La tua pizza"}
+                    {language === 'en' && "Your pizza"}
+                    {language === 'es' && "Tu pizza"}
+                    {language === 'ar' && "بيتزا خاصة بك"}
+                    {language === 'ur' && "آپ کا پیزا"}
+                  </p>
                   <p className="text-base font-black truncate">{selectedPizza.name}</p>
                 </div>
                 <div className="flex flex-col">
-                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">Orario</p>
+                  <p className="text-[8px] font-black text-[#8E8E93] uppercase tracking-tighter">
+                    {language === 'it' && "Orario"}
+                    {language === 'en' && "Pickup Time"}
+                    {language === 'es' && "Hora de Recogida"}
+                    {language === 'ar' && "وقت الاستلام"}
+                    {language === 'ur' && "پک اپ کا وقت"}
+                  </p>
                   <p className="text-base font-black">{slot}</p>
                 </div>
 
-              {(selectedAddIds.length > 0 || selectedRemoveIds.length > 0) && (
+              {(selectedAddIds.length > 0 || selectedRemoveIds.length > 0 || selectedFlagIds.length > 0) && (
                 <div className="pt-2 border-t border-[#C6C6C8]/20 space-y-1.5">
                   <div className="flex flex-wrap gap-1">
                     {selectedAddIds.map(id => {
@@ -626,14 +686,20 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
             <div className="flex flex-col gap-2 pt-1">
               <Button fullWidth onClick={handleConfirmOrder} disabled={submitting} className="!py-3.5 !text-sm shadow-md">
-                {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : 'SÌ, INVIA ORDINE'}
+                {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : (
+                  language === 'it' ? "SÌ, INVIA ORDINE" :
+                  language === 'en' ? "YES, SEND ORDER" :
+                  language === 'es' ? "SÍ, ENVIAR PEDIDO" :
+                  language === 'ar' ? "نعم، أرسل الطلب" :
+                  language === 'ur' ? "ہاں، آرڈر بھیجیں" : "SÌ, INVIA ORDINE"
+                )}
               </Button>
               <button 
                 onClick={() => setShowRecap(false)}
                 disabled={submitting}
                 className="w-full py-2 text-[9px] font-black text-[#8E8E93] uppercase tracking-widest"
               >
-                Annulla
+                {t('cancelBtn')}
               </button>
             </div>
           </Card>

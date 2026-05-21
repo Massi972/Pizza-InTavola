@@ -13,10 +13,10 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBack }) => {
   return (
     <div className="min-h-full flex flex-col w-full max-w-lg mx-auto bg-[#F2F2F7] relative">
-      <header className="sticky top-0 z-40 ios-blur border-b border-[#C6C6C8] px-4 pb-3 safe-header-padding flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 ios-blur border-b border-[#C6C6C8] px-4 pb-3 safe-header-padding flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {onBack && (
-            <button onClick={onBack} className="p-2 -ml-2 text-[#007AFF] active:opacity-40 transition-opacity">
+            <button onClick={onBack} className="p-2 -ml-2 text-[#007AFF] active:opacity-40 transition-opacity shrink-0">
               <ChevronLeft size={24} />
             </button>
           )}
@@ -25,7 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, onLogout, onBac
         {onLogout && (
           <button 
             onClick={onLogout}
-            className="p-2 -mr-2 text-[#FF3B30] active:opacity-40 transition-opacity"
+            className="p-2 -mr-2 text-[#FF3B30] active:opacity-40 transition-opacity shrink-0"
           >
             <LogOut size={20} />
           </button>

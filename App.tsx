@@ -12,11 +12,12 @@ import AdminCalendar from './views/AdminCalendar';
 import AdminFlags from './views/AdminFlags';
 import RegisterView from './views/Register';
 import { Button } from './components/UI';
+import { LanguageProvider } from './services/i18n';
 
 // Soglia zero: sicurezza massima, nessun tempo di tolleranza.
 const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; 
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
     // Usiamo sessionStorage per far sì che la sessione muoia con la chiusura del processo/tab
     const saved = sessionStorage.getItem('pizzastaff_auth');
@@ -98,6 +99,14 @@ const App: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 };
 

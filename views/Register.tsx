@@ -5,6 +5,8 @@ import { User, Role } from '../types';
 import { Layout } from '../components/Layout';
 import { Button, Input, Card } from '../components/UI';
 import { Check, UserPlus, ShieldCheck, AlertCircle, ArrowLeft, Smartphone, Share, MoreVertical } from '../components/Icons';
+import { useTranslation } from '../services/i18n';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 interface RegisterProps {
   onBack: () => void;
@@ -12,6 +14,7 @@ interface RegisterProps {
 }
 
 const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
+  const { t, isRtl, language } = useTranslation();
   const [step, setStep] = useState(1);
   const [registeredUser, setRegisteredUser] = useState<User | null>(null);
   const [masterPin, setMasterPin] = useState('');
@@ -28,7 +31,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
   const handleVerifyMaster = async () => {
     const cleanPin = masterPin.trim();
     if (!cleanPin) {
-      setError('Inserisci il codice locale');
+      setError(t('localCodeLabel'));
       return;
     }
 
@@ -39,7 +42,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
       
       // Controllo se le registrazioni sono aperte
       if (settings.registration_open === false) {
-        setError('Le registrazioni sono attualmente chiuse. Contatta l\'amministratore.');
+        setError(t('registrationClosed'));
         setLoading(false);
         return;
       }
@@ -47,20 +50,20 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
       if (cleanPin === String(settings.registration_pin).trim()) {
         setStep(2);
       } else {
-        setError('Codice di Registrazione non valido. Chiedi al responsabile.');
+        setError(t('invalidLocalCode'));
       }
     } catch (err) {
-      setError('Errore di connessione al sistema');
+      setError(t('connectionError'));
     } finally {
       setLoading(false);
     }
   };
 
   const validateFields = () => {
-    if (!userData.firstName.trim() || !userData.lastName.trim()) return "Nome e Cognome obbligatori";
-    if (!userData.phone_e164.trim() || userData.phone_e164 === '+39') return "Numero di telefono obbligatorio";
-    if (!userData.email.trim() || !userData.email.includes('@')) return "Email valida obbligatoria";
-    if (!userData.pin || userData.pin.length < 4) return "PIN di 4 cifre obbligatorio";
+    if (!userData.firstName.trim() || !userData.lastName.trim()) return t('requiredFields');
+    if (!userData.phone_e164.trim() || userData.phone_e164 === '+39') return t('phoneRequired');
+    if (!userData.email.trim() || !userData.email.includes('@')) return t('emailRequired');
+    if (!userData.pin || userData.pin.length < 4) return t('pinRequiredLength');
     return null;
   };
 
@@ -79,7 +82,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
       const currentMaster = settings.registration_pin;
       
       if (userData.pin === currentMaster) {
-        setError('Il PIN personale non può essere uguale al Codice di Registrazione.');
+        setError(t('pinMatchesMasterError'));
         setLoading(false);
         return;
       }
@@ -92,19 +95,19 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
       ]);
 
       if (!isPinAvailable) {
-        setError('Questo PIN è già in uso o non disponibile. Scegline un altro.');
+        setError(t('pinTaken'));
         setLoading(false);
         return;
       }
 
       if (!isEmailAvailable) {
-        setError('Questa email è già associata a un account esistente.');
+        setError(t('emailTaken'));
         setLoading(false);
         return;
       }
 
       if (!isPhoneAvailable) {
-        setError('Questo numero di telefono è già associato a un account esistente.');
+        setError(t('phoneTaken'));
         setLoading(false);
         return;
       }
@@ -126,28 +129,31 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
         onBack();
       }
     } catch (err: any) {
-      setError(err.message || 'Errore durante la registrazione');
+      setError(err.message || t('genericError'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Layout title="Registrazione Staff" onBack={onBack}>
+    <Layout title={t('registerTitle')} onBack={onBack}>
       <div className="space-y-6 py-4">
+        <div className="flex justify-center">
+          <LanguageSwitcher />
+        </div>
         {step === 1 && (
           <div className="space-y-6 animate-in slide-in-from-right duration-300">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 bg-[#007AFF]/10 text-[#007AFF] rounded-full flex items-center justify-center mx-auto">
                 <ShieldCheck size={32} />
               </div>
-              <h2 className="text-xl font-bold">Verifica Identità</h2>
-              <p className="text-sm text-[#8E8E93]">Inserisci il Codice Locale per procedere.</p>
+              <h2 className="text-xl font-bold">{t('verifyIdentity')}</h2>
+              <p className="text-sm text-[#8E8E93]">{t('localCodeLabel')}</p>
             </div>
 
             <Card className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest pl-1">Codice Locale</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest pl-1">{t('localCodeLabel')}</label>
                 <Input 
                   type="password"
                   inputMode="numeric"
@@ -166,7 +172,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
               )}
 
               <Button fullWidth onClick={handleVerifyMaster} disabled={loading || !masterPin}>
-                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : 'Continua'}
+                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : t('continueBtn')}
               </Button>
             </Card>
           </div>
@@ -178,34 +184,46 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
               <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
                 <UserPlus size={32} />
               </div>
-              <h2 className="text-xl font-bold">I tuoi dati</h2>
-              <p className="text-sm text-[#8E8E93]">Crea il tuo profilo per iniziare a ordinare.</p>
+              <h2 className="text-xl font-bold">
+                {language === 'it' && "I tuoi dati"}
+                {language === 'en' && "Your Details"}
+                {language === 'es' && "Tus Datos"}
+                {language === 'ar' && "بياناتك الشخصية"}
+                {language === 'ur' && "آپ کی معلومات"}
+              </h2>
+              <p className="text-sm text-[#8E8E93]">
+                {language === 'it' && "Crea il tuo profilo per iniziare a ordinare."}
+                {language === 'en' && "Create your profile to start ordering."}
+                {language === 'es' && "Crea tu perfil para empezar a pedir."}
+                {language === 'ar' && "أنشئ ملفك الشخصي لتتمكن من تقديم الطلب."}
+                {language === 'ur' && "آرڈر شروع کرنے کے لیے اپنا پروفائل بنائیں۔"}
+              </p>
             </div>
 
             <Card className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Nome</label>
-                  <Input placeholder="Es: Mario" value={userData.firstName} onChange={e => setUserData({...userData, firstName: e.target.value})} />
+                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">{t('firstNameLabel')}</label>
+                  <Input placeholder={t('firstNamePlaceholder')} value={userData.firstName} onChange={e => setUserData({...userData, firstName: e.target.value})} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Cognome</label>
-                  <Input placeholder="Es: Rossi" value={userData.lastName} onChange={e => setUserData({...userData, lastName: e.target.value})} />
+                  <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">{t('lastNameLabel')}</label>
+                  <Input placeholder={t('lastNamePlaceholder')} value={userData.lastName} onChange={e => setUserData({...userData, lastName: e.target.value})} />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Email</label>
-                <Input placeholder="mario.rossi@aziende.it" type="email" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} />
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">{t('emailLabel')}</label>
+                <Input placeholder={t('emailPlaceholder')} type="email" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">WhatsApp (+39...)</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">{t('phoneLabel')}</label>
                 <Input placeholder="+39..." type="tel" value={userData.phone_e164} onChange={e => setUserData({...userData, phone_e164: e.target.value})} />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">Scegli il tuo PIN (4 cifre)</label>
+                <label className="text-[10px] font-bold text-[#8E8E93] uppercase pl-1">{t('choosePinLabel')}</label>
                 <Input 
                   placeholder="PIN" 
                   type="password" 
@@ -224,14 +242,14 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
               )}
 
               <Button fullWidth onClick={handleRegister} disabled={loading}>
-                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : 'Completa Registrazione'}
+                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : t('completeRegBtn')}
               </Button>
 
               <button 
                 onClick={() => setStep(1)}
                 className="w-full flex items-center justify-center gap-2 text-xs font-bold text-[#8E8E93] uppercase"
               >
-                <ArrowLeft size={14} /> Indietro
+                <ArrowLeft size={14} /> {t('backBtn')}
               </button>
             </Card>
           </div>
@@ -243,15 +261,15 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Check size={32} />
               </div>
-              <h2 className="text-2xl font-black tracking-tight">Registrazione Completata!</h2>
+              <h2 className="text-2xl font-black tracking-tight">{t('regCompleteTitle')}</h2>
               <p className="text-sm font-medium text-[#8E8E93] max-w-[250px] mx-auto">
-                Il tuo account è pronto. Ora rendilo facile da usare!
+                {t('regCompleteDesc')}
               </p>
             </div>
 
             <div className="space-y-4">
               <p className="text-xs font-bold text-[#8E8E93] uppercase tracking-widest text-center">
-                Aggiungi l'app alla tua schermata Home
+                {t('addToHomeTitle')}
               </p>
               
               <div className="grid grid-cols-1 gap-3">
@@ -261,9 +279,9 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
                     <Smartphone size={24} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-black flex items-center gap-2">📱 Se hai Android</p>
+                    <p className="text-sm font-black flex items-center gap-2">{t('androidGuideTitle')}</p>
                     <p className="text-[11px] leading-relaxed text-gray-600">
-                      Usa <b>Chrome</b>, premi i <b>tre puntini</b> <MoreVertical size={10} className="inline" /> in alto a destra e seleziona <b>"Aggiungi a schermata Home"</b>.
+                      {t('androidGuideDesc')}
                     </p>
                   </div>
                 </div>
@@ -274,9 +292,9 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
                     <Share size={24} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-black flex items-center gap-2">🍎 Se hai iPhone</p>
-                    <p className="text-[11px] leading-relaxed text-gray-600">
-                      Usa <b>Safari</b>, premi il tasto <b>Condividi</b> <Share size={10} className="inline" /> (il quadrato con la freccia) e seleziona <b>"Aggiungi a Home"</b>.
+                    <p className="text-sm font-black flex items-center gap-2">{t('iosGuideTitle')}</p>
+                    <p className="text-[11px] leading-relaxed text-gray-600 flex flex-wrap gap-1 items-center">
+                      {t('iosGuideDesc')}
                     </p>
                   </div>
                 </div>
@@ -288,7 +306,7 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
                   onClick={() => registeredUser && onSuccess(registeredUser)}
                   className="!rounded-[20px]"
                 >
-                  Ho capito, vai al Login
+                  {t('backToLoginBtn')}
                 </Button>
               </div>
             </div>

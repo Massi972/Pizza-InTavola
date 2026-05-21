@@ -3,6 +3,8 @@ import { db } from '../services/db';
 import { User } from '../types';
 import { PizzaIcon, Smartphone, Mail, X, CheckCircle2, ShieldQuestion } from '../components/Icons';
 import { Button, Input } from '../components/UI';
+import { useTranslation } from '../services/i18n';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -10,6 +12,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
+  const { t, isRtl, language } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,12 +37,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
       } else {
         const nextAttempts = failedAttempts + 1;
         setFailedAttempts(nextAttempts);
-        setError('PIN non valido');
+        setError(t('invalidPin'));
         setPin('');
       }
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err.message || 'Errore di connessione');
+      setError(err.message || t('connectionError'));
     } finally {
       setLoading(false);
     }
@@ -47,7 +50,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
 
   const handleRecovery = async () => {
     if (!recoveryEmail || !recoveryPhone) {
-      setRecoveryError('Inserisci entrambi i campi');
+      setRecoveryError(t('requiredFields'));
       return;
     }
     setRecoveryLoading(true);
@@ -57,10 +60,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
       if (pin) {
         setRecoveredPin(pin);
       } else {
-        setRecoveryError('Dati non corrispondenti. Verifica email e telefono.');
+        setRecoveryError(t('mismatchError'));
       }
     } catch (err) {
-      setRecoveryError('Si è verificato un errore durante il recupero.');
+      setRecoveryError(t('genericError'));
     } finally {
       setRecoveryLoading(false);
     }
@@ -83,15 +86,25 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7] safe-top safe-bottom relative">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#F2F2F7] safe-top safe-bottom relative animate-in fade-in duration-300">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
+        <LanguageSwitcher />
+      </div>
+
       <div className="w-full max-w-xs flex flex-col items-center gap-8">
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-6 mt-8">
           <div className="w-24 h-24 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[22%] flex items-center justify-center shadow-2xl">
              <PizzaIcon size={48} className="text-white" />
           </div>
           <div className="text-center">
             <h1 className="text-3xl font-black tracking-tighter text-[#1c1c1e]">InTavola Staff</h1>
-            <p className="text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.3em] mt-1">Area Riservata Dipendenti</p>
+            <p className="text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.3em] mt-1">
+              {language === 'it' && "Area Riservata Dipendenti"}
+              {language === 'en' && "Employee Private Area"}
+              {language === 'es' && "Área Privada de Empleados"}
+              {language === 'ar' && "منطقة خاصة بالموظفين"}
+              {language === 'ur' && "ملازمین کا خفیہ ایریا"}
+            </p>
           </div>
         </div>
 
@@ -117,21 +130,26 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
               <button 
                 onClick={handleLogin} 
                 disabled={pin.length < 4 || loading} 
-                className="w-16 h-16 rounded-full bg-[#007AFF] text-white text-sm font-black shadow-lg flex items-center justify-center mx-auto active:scale-95 disabled:opacity-50 transition-all"
+                className="w-16 h-16 rounded-full bg-[#007AFF] text-white text-[10px] font-black shadow-lg flex items-center justify-center mx-auto active:scale-95 disabled:opacity-50 transition-all uppercase"
               >
-                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : 'ENTRA'}
+                {loading ? <div className="loading-spinner border-white border-t-transparent" /> : (
+                  language === 'it' ? 'ENTRA' :
+                  language === 'en' ? 'ENTER' :
+                  language === 'es' ? 'ENTRAR' :
+                  language === 'ar' ? 'دخول' : 'داخل ہوں'
+                )}
               </button>
             </div>
             
             <div className="flex flex-col gap-3 mt-8">
-              <button onClick={() => setPin('')} className="w-full text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]">Cancella</button>
+              <button onClick={() => setPin('')} className="w-full text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em]">{t('deleteKey')}</button>
               
               {(failedAttempts >= 3 || pin === '') && (
                 <button 
                   onClick={() => setShowRecovery(true)}
                   className="w-full text-[10px] font-bold text-indigo-600 uppercase tracking-wider flex items-center justify-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
                 >
-                  <ShieldQuestion size={12} /> Non ricordo il mio PIN
+                  <ShieldQuestion size={12} /> {t('forgotPin')}
                 </button>
               )}
             </div>
@@ -140,12 +158,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
               onClick={onRegister} 
               className="w-full mt-10 py-3 rounded-2xl bg-white border border-[#D1D1D6] text-xs font-bold text-[#1c1c1e] shadow-sm uppercase tracking-widest active:scale-95 transition-all"
             >
-              Non sei in lista? Registrati
+              {t('notOnList')}
             </button>
           </div>
           
           <p className="text-center mt-12 text-[9px] font-bold text-[#C6C6C8] uppercase tracking-[0.1em] max-w-[200px] leading-relaxed">
-            Per sicurezza, la sessione scade quando chiudi l'app.
+            {language === 'it' && "Per sicurezza, la sessione scade quando chiudi l'app."}
+            {language === 'en' && "For security, the session expires when you close the app."}
+            {language === 'es' && "Por seguridad, la sesión caduca al cerrar la aplicación."}
+            {language === 'ar' && "لدواعي الأمن، تنتهي الجلسة عند إغلاق التطبيق."}
+            {language === 'ur' && "سیکیورٹی کے لیے، جب آپ ایپ بند کرتے ہیں تو سیشن ختم ہو جاتا ہے۔"}
           </p>
         </div>
       </div>
@@ -164,13 +186,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
                   <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-2">
                     <ShieldQuestion size={28} />
                   </div>
-                  <h3 className="text-2xl font-black tracking-tight">Recupero Accesso</h3>
-                  <p className="text-sm text-[#8E8E93] font-medium">Per visualizzare il tuo PIN, conferma i tuoi dati personali registrati.</p>
+                  <h3 className="text-2xl font-black tracking-tight">{t('recoveryTitle')}</h3>
+                  <p className="text-sm text-[#8E8E93] font-medium">{t('recoveryDesc')}</p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">Email</label>
+                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">{t('emailLabel')}</label>
                     <Input 
                       placeholder="la-tua@email.it"
                       value={recoveryEmail}
@@ -180,7 +202,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">Cellulare (es. +39...)</label>
+                    <label className="text-[10px] font-bold text-[#8E8E93] uppercase tracking-widest px-1">{t('phoneLabel')}</label>
                     <Input 
                       placeholder="+39 333 1234567"
                       value={recoveryPhone}
@@ -198,7 +220,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
                     loading={recoveryLoading}
                     className="!rounded-2xl !bg-[#007AFF] !h-14 font-black tracking-widest pt-1"
                   >
-                    VERIFICA IDENTITÀ
+                    {t('verifyIdentity')}
                   </Button>
                 </div>
               </>
@@ -209,9 +231,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
                 </div>
                 
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-black tracking-tight">Identità Verificata</h3>
+                  <h3 className="text-2xl font-black tracking-tight">{t('verifiedIdentity')}</h3>
                   <div className="bg-[#F2F2F7] p-6 rounded-[28px] mt-4 border-2 border-green-200">
-                    <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-4 text-center">Il tuo PIN Personale è:</p>
+                    <p className="text-[10px] font-black text-[#8E8E93] uppercase tracking-[0.2em] mb-4 text-center">{t('yourPersonalPin')}:</p>
                     <div className="flex justify-center gap-4">
                       {recoveredPin.split('').map((digit, idx) => (
                         <span key={idx} className="text-4xl font-black text-[#007AFF] tabular-nums">{digit}</span>
@@ -222,7 +244,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
 
                 <div className="space-y-4 max-w-[280px] mx-auto">
                   <p className="text-xs font-medium text-[#1c1c1e] bg-indigo-50 p-4 rounded-2xl border border-indigo-100 italic leading-relaxed">
-                    "Gentile dipendente, ricordati che il tuo PIN è strettamente personale e non deve essere condiviso con nessuno."
+                    "{t('recWarning')}"
                   </p>
                   
                   <Button 
@@ -230,7 +252,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister }) => {
                     onClick={closeRecovery}
                     className="!rounded-2xl !bg-black text-white font-black tracking-widest pt-1"
                   >
-                    HO CAPITO, TORNA AL LOGIN
+                    {t('understandButton')}
                   </Button>
                 </div>
               </div>
