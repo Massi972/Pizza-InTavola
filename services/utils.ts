@@ -40,15 +40,37 @@ export const getDayAvailability = (
   const todayStr = getTodayDateString();
   const isToday = dateStr === todayStr;
   
-  // 1. PRIORITÀ MASSIMA: CONTROLLO MANUALE (ADMIN ACTION)
+  // 1. CHIUSURA AUTOMATICA OLTRE ORARIO LIMITE (HARD RULE)
+  if (isToday && !isBeforeCutoff(cutoffTimeStr)) {
+    // Unica eccezione: se c'è un'apertura temporanea attiva
+    if (temporaryOpeningUntil && Date.now() <= temporaryOpeningUntil) {
+      return { 
+        isActive: true, 
+        label: 'APERTURA TEMPORANEA', 
+        colorClass: 'text-green-600 bg-green-100 font-black',
+        isToday, 
+        dayName 
+      };
+    }
+
+    return {
+      isActive: false,
+      label: `CHIUSO (OLTRE ${cutoffTimeStr})`,
+      colorClass: 'text-red-500 bg-red-50 font-bold',
+      isToday,
+      dayName
+    };
+  }
+
+  // 2. PRIORITÀ: CONTROLLO MANUALE (ADMIN ACTION)
   if (manualDayRecord && isToday) {
     if (manualDayRecord.status === DayStatus.OPEN) {
-      // Se c'è un tempo di scadenza, verifica se è passato
+      // Se c'è un tempo di scadenza impostato ma passato, chiudi
       if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil) {
         return { 
           isActive: false, 
           label: 'CHIUSO (TEMPO SCADUTO)', 
-          colorClass: 'text-red-500 bg-red-50', 
+          colorClass: 'text-red-500 bg-red-50 font-bold', 
           isToday, 
           dayName 
         };
@@ -72,7 +94,7 @@ export const getDayAvailability = (
     }
   }
 
-  // 2. CONTROLLO OVERRIDES
+  // 3. CONTROLLO OVERRIDES
   const override = (overrides || []).find(o => o.date === dateStr);
   if (override) {
     if (override.type === OverrideType.DISABLED || override.type === OverrideType.FORCE_CLOSED) {
@@ -83,24 +105,14 @@ export const getDayAvailability = (
     }
   }
 
-  // 3. CONTROLLO LOOP SETTIMANALE
+  // 4. CONTROLLO LOOP SETTIMANALE
   const isScheduled = (recurringDays || []).includes(dayName);
   
   if (!isScheduled) {
     return { isActive: false, label: 'CHIUSO (CALENDARIO)', colorClass: 'text-gray-400 bg-gray-50', isToday, dayName };
   }
 
-  let isActive = true;
-  let label = 'APERTO (PROGRAMMATO)';
-  let colorClass = 'text-green-600 bg-green-50';
-
-  if (isToday && !isBeforeCutoff(cutoffTimeStr)) {
-    isActive = false;
-    label = `CHIUSO (OLTRE ${cutoffTimeStr})`;
-    colorClass = 'text-red-500 bg-red-50 font-bold';
-  }
-
-  return { isActive, label, colorClass, isToday, dayName };
+  return { isActive: true, label: 'APERTO (PROGRAMMATO)', colorClass: 'text-green-600 bg-green-50', isToday, dayName };
 };
 
 export const formatDate = (date: string | Date): string => {
