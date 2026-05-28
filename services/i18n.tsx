@@ -94,6 +94,8 @@ export interface TranslationDict {
   recapPizzaLabel: string;
   recapTimeLabel: string;
   yesSubmitOrderBtn: string;
+  selectTimeError: string;
+  selectTimePlaceholder: string;
 }
 
 const translations: Record<Language, TranslationDict> = {
@@ -186,7 +188,9 @@ const translations: Record<Language, TranslationDict> = {
     recapVerifyDesc: "Verifica prima di inviare",
     recapPizzaLabel: "La tua pizza",
     recapTimeLabel: "Orario di ritiro",
-    yesSubmitOrderBtn: "SÌ, INVIA ORDINE"
+    yesSubmitOrderBtn: "SÌ, INVIA ORDINE",
+    selectTimeError: "Seleziona obbligatoriamente un orario per la pizza!",
+    selectTimePlaceholder: "-- Seleziona l'Orario --"
   },
   en: {
     enterPin: "Enter your PIN",
@@ -277,7 +281,9 @@ const translations: Record<Language, TranslationDict> = {
     recapVerifyDesc: "Verify your request before sending",
     recapPizzaLabel: "Your pizza",
     recapTimeLabel: "Pick-up time",
-    yesSubmitOrderBtn: "YES, SEND ORDER"
+    yesSubmitOrderBtn: "YES, SEND ORDER",
+    selectTimeError: "Please select a pickup time for your pizza!",
+    selectTimePlaceholder: "-- Select Pickup Time --"
   },
   es: {
     enterPin: "Scegli il tuo PIN / Introduce tu PIN",
@@ -368,7 +374,9 @@ const translations: Record<Language, TranslationDict> = {
     recapVerifyDesc: "Verifica antes de enviar",
     recapPizzaLabel: "Tu pizza",
     recapTimeLabel: "Hora de recogida",
-    yesSubmitOrderBtn: "SÍ, ENVIAR PEDIDO"
+    yesSubmitOrderBtn: "SÍ, ENVIAR PEDIDO",
+    selectTimeError: "¡Por favor, selecciona una hora para la pizza!",
+    selectTimePlaceholder: "-- Selecciona la hora --"
   },
   ar: {
     enterPin: "أدخل رمز PIN الخاص بك",
@@ -459,7 +467,9 @@ const translations: Record<Language, TranslationDict> = {
     recapVerifyDesc: "يرجى مراجعة وتأكيد طلبك قبل الإرسال",
     recapPizzaLabel: "البيتزا المختارة",
     recapTimeLabel: "وقت الاستلام المحدد",
-    yesSubmitOrderBtn: "نعم، أرسل الطلب الآن"
+    yesSubmitOrderBtn: "نعم، أرسل الطلب الآن",
+    selectTimeError: "يرجى تحديد وقت استلام البيتزا الخاص بك!",
+    selectTimePlaceholder: "-- اختر وقت الاستلام --"
   },
   ur: {
     enterPin: "اپنا ذاتی پن درج کریں",
@@ -550,7 +560,9 @@ const translations: Record<Language, TranslationDict> = {
     recapVerifyDesc: "آرڈر بھیجنے سے پہلے تفصیلات اچھی طرح دیکھ لیں",
     recapPizzaLabel: "منتخب کردہ پیزا",
     recapTimeLabel: "اٹھانے کا وقت",
-    yesSubmitOrderBtn: "ہاں، آرڈر بھیجیں"
+    yesSubmitOrderBtn: "ہاں، آرڈر بھیجیں",
+    selectTimeError: "براہ کرم پیزا اٹھانے کا وقت منتخب کریں!",
+    selectTimePlaceholder: "-- وقت منتخب کریں --"
   }
 };
 

@@ -47,10 +47,19 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const [favoriteOrder, setFavoriteOrder] = useState<Partial<Order> | null>(null);
   const [search, setSearch] = useState('');
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
-  const [slot, setSlot] = useState<SlotTime>('18:00');
+  const [slot, setSlot] = useState<SlotTime | ''>('');
   const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
   const [selectedRemoveIds, setSelectedRemoveIds] = useState<string[]>([]);
   const [selectedFlagIds, setSelectedFlagIds] = useState<string[]>([]);
+
+  const handleSelectPizza = (pizza: Pizza) => {
+    setSelectedPizza(pizza);
+    setSlot('');
+    setSelectedAddIds([]);
+    setSelectedRemoveIds([]);
+    setSelectedFlagIds([]);
+    setErrorMessage(null);
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -176,6 +185,10 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
 
   const handleConfirmOrder = async () => {
     if (!selectedPizza) return;
+    if (!slot) {
+      setErrorMessage(t('selectTimeError'));
+      return;
+    }
     setSubmitting(true);
     setErrorMessage(null);
     try {
@@ -187,7 +200,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         dayId: targetDayId,
         userId: user.id,
         pizzaId: selectedPizza.id,
-        slotTime: slot,
+        slotTime: slot as SlotTime,
         addModificationIds: selectedAddIds,
         removeModificationIds: selectedRemoveIds,
         flagIds: selectedFlagIds,
@@ -329,7 +342,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
               {filteredPizzas.map(pizza => (
-                <Card key={pizza.id} className="p-4 cursor-pointer hover:shadow-md active:scale-[0.97] transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/10" onClick={() => canOrder && setSelectedPizza(pizza)}>
+                <Card key={pizza.id} className="p-4 cursor-pointer hover:shadow-md active:scale-[0.97] transition-all flex flex-col h-full border border-transparent hover:border-[#007AFF]/10" onClick={() => canOrder && handleSelectPizza(pizza)}>
                   <div className="flex justify-between items-start mb-1.5">
                     <h3 className="font-black text-base text-[#1c1c1e] truncate pr-2">{pizza.name}</h3>
                     {pizza.isVegetarian && <span className="bg-green-100 text-green-700 text-[8px] px-1.5 py-0.5 rounded-full font-black tracking-wider shrink-0">VEG</span>}
@@ -530,8 +543,37 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
             </div>
             <div className="space-y-5">
               <section className="space-y-2">
-                <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">{t('pickupTimeLabel')}</p>
-                <div className="bg-white p-1.5 rounded-xl shadow-sm"><SegmentedControl options={SLOT_TIMES} selected={slot} onChange={(v) => setSlot(v as SlotTime)} /></div>
+                <p className="text-[9px] font-black text-[#8E8E93] uppercase tracking-widest pl-1">
+                  {t('pickupTimeLabel')} <span className="text-[#FF3B30] font-black">*</span>
+                </p>
+                <div className="relative">
+                  <select
+                    id="pizza-time-select"
+                    value={slot}
+                    onChange={(e) => {
+                      const val = e.target.value as SlotTime;
+                      setSlot(val);
+                      if (val) {
+                        setErrorMessage(null);
+                      }
+                    }}
+                    className="w-full bg-white text-[#1c1c1e] text-xs font-black py-3.5 pl-4 pr-10 rounded-xl border border-transparent shadow-sm outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled className="text-gray-400 font-medium">
+                      {t('selectTimePlaceholder')}
+                    </option>
+                    {SLOT_TIMES.map((time) => (
+                      <option key={time} value={time} className="text-[#1c1c1e] font-black">
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[#8E8E93]">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                    </svg>
+                  </div>
+                </div>
               </section>
               <div className="space-y-5">
                 <section className="space-y-2">
@@ -599,8 +641,24 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
               </div>
               
               <div className="pt-2 flex flex-col gap-2">
-                {errorMessage && <p className="text-[10px] text-[#FF3B30] font-black mb-2 text-center uppercase tracking-tighter">{errorMessage}</p>}
-                <Button fullWidth onClick={() => setShowRecap(true)} disabled={submitting} className="!py-4 !text-base">
+                {errorMessage && (
+                  <p className="text-[11px] text-[#FF3B30] font-black mb-2 text-center uppercase bg-red-50 py-2.5 px-4 rounded-xl border border-red-100 animate-pulse tracking-tight">
+                    {errorMessage}
+                  </p>
+                )}
+                <Button 
+                  fullWidth 
+                  onClick={() => {
+                    if (!slot) {
+                      setErrorMessage(t('selectTimeError'));
+                      return;
+                    }
+                    setErrorMessage(null);
+                    setShowRecap(true);
+                  }} 
+                  disabled={submitting} 
+                  className="!py-4 !text-base"
+                >
                   {submitting ? <div className="loading-spinner border-white border-t-transparent" /> : (
                     language === 'it' ? "Conferma Ordine" :
                     language === 'en' ? "Confirm Order" :
