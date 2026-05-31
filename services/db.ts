@@ -74,17 +74,32 @@ class DB {
       }
 
       // Mapping: usiamo 'emergency_pin' dal DB per popolare 'registration_pin' nel codice
+      let override_cutoff = !!data.override_cutoff;
+      let temporary_opening_until = data.temporary_opening_until ?? null;
+
+      // Se oggi non c'è una giornata d'ordine creata nel DB, resettiamo gli override temporanei dello scattare del giorno dopo
+      if (override_cutoff || temporary_opening_until !== null) {
+        const today = new Date().toLocaleDateString('en-CA');
+        const { data: dayData } = await supabase.from('days').select('id').eq('date', today).maybeSingle();
+        if (!dayData) {
+          override_cutoff = false;
+          temporary_opening_until = null;
+          // Eseguiamo update asincrono sul DB senza bloccare il caricamento principale
+          supabase.from('settings').update({ override_cutoff: false, temporary_opening_until: null }).eq('id', 'global').then();
+        }
+      }
+
       return {
         registration_pin: data.emergency_pin !== undefined ? String(data.emergency_pin) : defaults.registration_pin,
         registration_open: data.registration_open !== undefined ? !!data.registration_open : defaults.registration_open,
-        override_cutoff: !!data.override_cutoff,
+        override_cutoff,
         manager_phone: data.manager_phone || '',
         active_days: Array.isArray(data.active_days) ? data.active_days : defaults.active_days,
         cutoff_time: data.cutoff_time || defaults.cutoff_time,
         pdf_title: data.pdf_title || defaults.pdf_title,
         pdf_show_summary: data.pdf_show_summary !== undefined ? !!data.pdf_show_summary : defaults.pdf_show_summary,
         pdf_show_list: data.pdf_show_list !== undefined ? !!data.pdf_show_list : defaults.pdf_show_list,
-        temporary_opening_until: data.temporary_opening_until ?? null
+        temporary_opening_until
       };
     } catch (err: any) {
       console.error("Eccezione getSettings:", err);
