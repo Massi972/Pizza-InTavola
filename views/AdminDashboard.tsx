@@ -20,7 +20,7 @@ import {
   ClockIcon,
   Flag
 } from '../components/Icons';
-import { formatDate, getDayAvailability, getTodayDateString } from '../services/utils';
+import { formatDate, getDayAvailability, getTodayDateString, isBeforeCutoff } from '../services/utils';
 import { generateDayReportPDF, HydratedOrder } from '../services/exportService';
 import { SLOT_TIMES } from '../constants';
 
@@ -169,8 +169,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
           });
         }, 1000);
       } else {
-        // Tempo scaduto ma giornata ancora aperta: chiudi
-        handleToggleDay('close');
+        // Se siamo ancora prima del limite orario, NON chiudiamo la giornata automatically!
+        // Ma puliamo semplicemente la variabile 'temporary_opening_until'
+        const limitStr = settings.cutoff_time || '16:30';
+        if (isBeforeCutoff(limitStr)) {
+          db.updateSettings({ temporary_opening_until: null }).then(fetchData);
+        } else {
+          // Se siamo dopo il cutoff, forziamo la chiusura
+          handleToggleDay('close');
+        }
       }
     } else {
       setAutoCloseTimer(null);

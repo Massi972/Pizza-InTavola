@@ -65,8 +65,9 @@ export const getDayAvailability = (
   // 2. PRIORITÀ: CONTROLLO MANUALE (ADMIN ACTION)
   if (manualDayRecord && isToday) {
     if (manualDayRecord.status === DayStatus.OPEN) {
-      // Se c'è un tempo di scadenza impostato ma passato, chiudi
-      if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil) {
+      // Se c'è un tempo di scadenza impostato e passato, chiudi, ma solo se siamo DOPO il cutoff!
+      // Se siamo prima del cutoff, la giornata è comunque aperta e attiva per default.
+      if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil && !isBeforeCutoff(cutoffTimeStr)) {
         return { 
           isActive: false, 
           label: 'CHIUSO (TEMPO SCADUTO)', 
@@ -78,7 +79,7 @@ export const getDayAvailability = (
 
       return { 
         isActive: true, 
-        label: temporaryOpeningUntil ? 'APERTURA TEMPORANEA' : 'APERTO (FORZATO)', 
+        label: (temporaryOpeningUntil && Date.now() <= temporaryOpeningUntil) ? 'APERTURA TEMPORANEA' : 'APERTO (FORZATO)', 
         colorClass: 'text-green-600 bg-green-100 font-black',
         isToday, 
         dayName 
