@@ -160,13 +160,24 @@ const AdminCalendar: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const now = new Date();
     const activeDays = settings?.active_days || [];
     const cutoff = settings?.cutoff_time || '16:30';
+    const tempOpen = settings?.temporary_opening_until;
+    const isOverrideCutoff = settings?.override_cutoff || false;
     for (let i = 0; i < 14; i++) {
       const d = new Date(now);
       d.setDate(now.getDate() + i);
       const dateStr = d.toLocaleDateString('en-CA');
+      const isToday = i === 0;
       days.push({
         dateStr,
-        info: getDayAvailability(dateStr, activeDays, overrides, i === 0 ? currentDay : null, cutoff)
+        info: getDayAvailability(
+          dateStr, 
+          activeDays, 
+          overrides, 
+          isToday ? currentDay : null, 
+          cutoff,
+          isToday ? tempOpen : null,
+          isToday ? isOverrideCutoff : false
+        )
       });
     }
     return days;

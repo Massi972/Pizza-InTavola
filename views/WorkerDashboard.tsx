@@ -75,7 +75,8 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         overrides, 
         currentDay,
         settings?.cutoff_time || '16:30',
-        settings?.temporary_opening_until
+        settings?.temporary_opening_until,
+        settings?.override_cutoff
     );
   }, [settings, overrides, currentDay]);
 

@@ -30,7 +30,8 @@ export const getDayAvailability = (
   overrides: DayOverride[] = [],
   manualDayRecord: Day | null,
   cutoffTimeStr: string = '16:30',
-  temporaryOpeningUntil?: number | null
+  temporaryOpeningUntil?: number | null,
+  overrideCutoff: boolean = false
 ) => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day, 12, 0, 0);
@@ -41,7 +42,7 @@ export const getDayAvailability = (
   const isToday = dateStr === todayStr;
   
   // 1. CHIUSURA AUTOMATICA OLTRE ORARIO LIMITE (HARD RULE)
-  if (isToday && !isBeforeCutoff(cutoffTimeStr)) {
+  if (isToday && !isBeforeCutoff(cutoffTimeStr) && !overrideCutoff) {
     // Unica eccezione: se c'è un'apertura temporanea attiva
     if (temporaryOpeningUntil && Date.now() <= temporaryOpeningUntil) {
       return { 
@@ -67,7 +68,7 @@ export const getDayAvailability = (
     if (manualDayRecord.status === DayStatus.OPEN) {
       // Se c'è un tempo di scadenza impostato e passato, chiudi, ma solo se siamo DOPO il cutoff!
       // Se siamo prima del cutoff, la giornata è comunque aperta e attiva per default.
-      if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil && !isBeforeCutoff(cutoffTimeStr)) {
+      if (temporaryOpeningUntil && Date.now() > temporaryOpeningUntil && !isBeforeCutoff(cutoffTimeStr) && !overrideCutoff) {
         return { 
           isActive: false, 
           label: 'CHIUSO (TEMPO SCADUTO)', 

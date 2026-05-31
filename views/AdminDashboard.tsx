@@ -103,7 +103,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
       overrides,
       currentDay,
       settings.cutoff_time,
-      settings.temporary_opening_until
+      settings.temporary_opening_until,
+      settings.override_cutoff
     );
   }, [settings, overrides, currentDay]);
 
@@ -188,22 +189,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onNavig
     };
   }, [settings?.temporary_opening_until, currentDay?.status]);
 
-  const handleToggleDay = async (action: 'open' | 'close') => {
+  const handleToggleDay = async (action: 'open_permanent' | 'open_temporary' | 'close') => {
     setActionLoading(true);
     try {
-      if (action === 'open') {
+      if (action === 'open_permanent') {
+        await Promise.all([
+          db.openDay(),
+          db.updateSettings({ override_cutoff: true, temporary_opening_until: null })
+        ]);
+        setToast("Giornata aperta permanentemente per oggi! 🔓");
+        setTimeout(() => setToast(null), 3000);
+      } else if (action === 'open_temporary') {
         const timeoutMs = 120000; // 2 minuti
         const until = Date.now() + timeoutMs;
         
         await Promise.all([
           db.openDay(),
-          db.updateSettings({ temporary_opening_until: until })
+          db.updateSettings({ override_cutoff: false, temporary_opening_until: until })
         ]);
+        setToast("Apertura temporanea attiva per 2 minuti ⏳");
+        setTimeout(() => setToast(null), 3000);
       } else {
         await Promise.all([
           db.closeDay(),
-          db.updateSettings({ temporary_opening_until: null })
+          db.updateSettings({ override_cutoff: false, temporary_opening_until: null })
         ]);
+        setToast("Giornata chiusa con successo 🔒");
+        setTimeout(() => setToast(null), 3000);
       }
       await fetchData();
     } catch (err: any) {
@@ -445,22 +457,36 @@ DO $$
                </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                onClick={() => handleToggleDay('open')} 
-                variant={currentDay?.status === 'OPEN' ? 'secondary' : 'primary'}
-                disabled={actionLoading}
-                className="!py-3.5"
-              >
-                <Unlock size={18} /> Forza Apertura
-              </Button>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Button 
+                  onClick={() => handleToggleDay('open_permanent')} 
+                  variant={currentDay?.status === 'OPEN' && settings.override_cutoff ? 'secondary' : 'primary'}
+                  disabled={actionLoading}
+                  className="!py-3.5"
+                >
+                  <Unlock size={18} /> Apri Giornata
+                </Button>
+                <Button 
+                  onClick={() => handleToggleDay('open_temporary')} 
+                  variant="secondary"
+                  disabled={actionLoading}
+                  className={`!py-3.5 ${
+                    settings.temporary_opening_until && Date.now() <= settings.temporary_opening_until
+                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-none animate-pulse'
+                      : 'bg-[#F2F2F7] text-[#007AFF] hover:bg-[#E5E5EA] border-none'
+                  }`}
+                >
+                  <ClockIcon size={18} /> Apri Temporaneo
+                </Button>
+              </div>
               <Button 
                 onClick={() => handleToggleDay('close')} 
-                variant="danger"
+                variant={currentDay?.status === 'CLOSED' ? 'secondary' : 'danger'}
                 disabled={actionLoading}
-                className="!py-3.5"
+                className="w-full !py-3.5"
               >
-                <Lock size={18} /> Forza Chiusura
+                <Lock size={18} /> Chiudi Giornata
               </Button>
             </div>
           </Card>
