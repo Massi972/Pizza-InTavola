@@ -18,7 +18,8 @@ import {
   X,
   Check,
   ClockIcon,
-  Flag
+  Flag,
+  Bell
 } from '../components/Icons';
 import { formatDate, getDayAvailability, getTodayDateString, isBeforeCutoff } from '../services/utils';
 import { generateDayReportPDF, HydratedOrder } from '../services/exportService';
@@ -27,7 +28,7 @@ import { SLOT_TIMES } from '../constants';
 interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
-  onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications' | 'calendar' | 'flags') => void;
+  onNavigate: (view: 'pizzas' | 'users' | 'history' | 'modifications' | 'calendar' | 'flags' | 'notifications') => void;
   onGoToOrder: () => void;
 }
 
@@ -535,6 +536,9 @@ DO $$
                 </Button>
                 <Button variant="secondary" fullWidth onClick={() => onNavigate('history')} className="justify-start !bg-white border border-[#C6C6C8]/30">
                   <History size={18} /> Archivio Storico
+                </Button>
+                <Button variant="secondary" fullWidth onClick={() => onNavigate('notifications')} className="justify-start !bg-white border border-[#C6C6C8]/30">
+                  <Bell size={18} className="text-[#FF9500]" /> Notifiche Push
                 </Button>
               </>
             )}

@@ -46,8 +46,8 @@ import {
   ShieldQuestion,
   CheckCircle2,
   Mail,
-  Star
-} from 'lucide-react';
+  Star,
+  Bell
 
 export {
   Pizza as PizzaIcon,
@@ -95,5 +95,6 @@ export {
   ShieldQuestion,
   CheckCircle2,
   Mail,
-  Star
+  Star,
+  Bell
 };
