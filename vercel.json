@@ -5,5 +5,10 @@
       "path": "/api/cron-reminder",
       "schedule": "0 9 * * 2,4"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
 }
