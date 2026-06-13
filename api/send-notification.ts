@@ -1,13 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-export const config = { runtime: 'nodejs' };
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 // Firma VAPID manuale usando Web Crypto (nativo Node 20, no dipendenze esterne)
 async function signVapid(audience: string): Promise<string> {
   const subject = process.env.VAPID_SUBJECT!;
@@ -50,6 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo non consentito' });
+
+  const supabase = createClient(
+    process.env.VITE_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const { title, body, url, targetUserId } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'Titolo e testo obbligatori' });
