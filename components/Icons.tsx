@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Pizza, 
@@ -48,6 +47,7 @@ import {
   Mail,
   Star,
   Bell
+} from 'lucide-react';
 
 export {
   Pizza as PizzaIcon,
