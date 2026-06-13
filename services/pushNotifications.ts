@@ -3,11 +3,11 @@
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
 
 // Converte la VAPID public key da base64 a Uint8Array (richiesto dalla Web Push API)
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
-  return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
+  return new Uint8Array([...rawData].map((char) => char.charCodeAt(0))).buffer as ArrayBuffer;
 }
 
 // Registra il service worker
