@@ -13,6 +13,7 @@ import AdminFlags from './views/AdminFlags';
 import RegisterView from './views/Register';
 import { Button } from './components/UI';
 import { LanguageProvider } from './services/i18n';
+import { subscribeToPush, registerServiceWorker } from './services/pushNotifications';
 
 // Soglia zero: sicurezza massima, nessun tempo di tolleranza.
 const BACKGROUND_LOGOUT_THRESHOLD_MS = 0; 
@@ -67,6 +68,12 @@ const AppContent: React.FC = () => {
   const handleLogin = (user: User) => {
     setAuth({ user, isAuthenticated: true });
     setIsRegistering(false);
+    // Registra il SW e richiede permesso notifiche dopo il login
+    setTimeout(() => {
+      registerServiceWorker().then(() => {
+        subscribeToPush(user.id).catch(console.error);
+      });
+    }, 2000);
   };
 
   if (!auth.isAuthenticated || !auth.user) {
