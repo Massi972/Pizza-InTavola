@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Button, Card, Input } from '../components/UI';
-import { Plus, Trash2, Bell, Check, AlertCircle, RefreshCw } from '../components/Icons';
+import { Plus, Trash2, Bell, Check, AlertCircle, RefreshCw, UsersIcon } from '../components/Icons';
 import { supabase } from '../services/db';
+import { User } from '../types';
+import { db } from '../services/db';
 
 interface ScheduledNotification {
   id: string;
@@ -42,6 +44,7 @@ const EMPTY_FORM = {
 
 const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
   const [notifications, setNotifications] = useState<ScheduledNotification[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -50,23 +53,31 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
 
+  // Broadcast state
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastBody, setBroadcastBody] = useState('');
+  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'single'>('all');
+  const [broadcastUserId, setBroadcastUserId] = useState('');
+  const [showBroadcast, setShowBroadcast] = useState(false);
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
-  const fetchNotifications = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('scheduled_notifications')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!error && data) setNotifications(data);
+    const [{ data: notifData }, userList] = await Promise.all([
+      supabase.from('scheduled_notifications').select('*').order('created_at', { ascending: false }),
+      db.getUsers(),
+    ]);
+    if (notifData) setNotifications(notifData);
+    setUsers(userList.filter(u => u.active));
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchNotifications();
+    fetchData();
   }, []);
 
   const toggleDay = (day: number) => {
@@ -98,38 +109,25 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
       target: 'all',
     }]);
     setSaving(false);
-    if (error) {
-      showToast('Errore nel salvataggio', false);
-      return;
-    }
+    if (error) { showToast('Errore nel salvataggio', false); return; }
     setForm({ ...EMPTY_FORM });
     setShowForm(false);
     showToast('Messaggio schedulato salvato!');
-    fetchNotifications();
+    fetchData();
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('scheduled_notifications')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      showToast('Errore eliminazione', false);
-      return;
-    }
+    const { error } = await supabase.from('scheduled_notifications').delete().eq('id', id);
+    if (error) { showToast('Errore eliminazione', false); return; }
     showToast('Eliminato');
-    fetchNotifications();
+    fetchData();
   };
 
   const handleToggleActive = async (n: ScheduledNotification) => {
-    const { error } = await supabase
-      .from('scheduled_notifications')
-      .update({ active: !n.active })
-      .eq('id', n.id);
-    if (!error) fetchNotifications();
+    const { error } = await supabase.from('scheduled_notifications').update({ active: !n.active }).eq('id', n.id);
+    if (!error) fetchData();
   };
 
-  // Invia subito una notifica specifica (test)
   const handleSendNow = async (n: ScheduledNotification) => {
     setSending(n.id);
     try {
@@ -146,27 +144,40 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
     setSending(null);
   };
 
-  // Invia subito a tutti (broadcast manuale)
-  const [broadcastTitle, setBroadcastTitle] = useState('');
-  const [broadcastBody, setBroadcastBody] = useState('');
-  const [showBroadcast, setShowBroadcast] = useState(false);
-
   const handleBroadcast = async () => {
     if (!broadcastTitle.trim() || !broadcastBody.trim()) {
       showToast('Inserisci titolo e testo', false);
       return;
     }
+    if (broadcastTarget === 'single' && !broadcastUserId) {
+      showToast('Seleziona un dipendente', false);
+      return;
+    }
     setSendingAll(true);
     try {
+      const body: any = {
+        title: broadcastTitle.trim(),
+        body: broadcastBody.trim(),
+        url: '/',
+      };
+      if (broadcastTarget === 'single') body.targetUserId = broadcastUserId;
+
       const res = await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: broadcastTitle.trim(), body: broadcastBody.trim(), url: '/' }),
+        body: JSON.stringify(body),
       });
       const result = await res.json();
-      showToast(`Inviato a ${result.sent ?? 0} dispositivi!`);
+      if (broadcastTarget === 'single') {
+        const userName = users.find(u => u.id === broadcastUserId);
+        showToast(`Inviato a ${userName?.firstName} ${userName?.lastName} (${result.sent ?? 0} dispositivi)`);
+      } else {
+        showToast(`Inviato a ${result.sent ?? 0} dispositivi!`);
+      }
       setBroadcastTitle('');
       setBroadcastBody('');
+      setBroadcastTarget('all');
+      setBroadcastUserId('');
       setShowBroadcast(false);
     } catch {
       showToast('Errore invio', false);
@@ -192,12 +203,12 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
 
       <div className="space-y-4">
 
-        {/* SEZIONE BROADCAST IMMEDIATO */}
+        {/* BROADCAST IMMEDIATO */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="font-semibold text-[#1c1c1e]">📢 Invia ora a tutti</p>
-              <p className="text-xs text-[#8E8E93] mt-0.5">Messaggio immediato a tutti gli utenti</p>
+              <p className="font-semibold text-[#1c1c1e]">📢 Invia subito</p>
+              <p className="text-xs text-[#8E8E93] mt-0.5">Messaggio immediato a tutti o a un singolo</p>
             </div>
             <Button size="sm" variant={showBroadcast ? 'secondary' : 'primary'} onClick={() => setShowBroadcast(!showBroadcast)}>
               {showBroadcast ? 'Chiudi' : 'Scrivi'}
@@ -206,8 +217,44 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
 
           {showBroadcast && (
             <div className="space-y-3 pt-3 border-t border-[#F2F2F7]">
+
+              {/* Destinatario */}
+              <div>
+                <p className="text-xs text-[#8E8E93] mb-2 font-medium">Destinatario</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setBroadcastTarget('all'); setBroadcastUserId(''); }}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${broadcastTarget === 'all' ? 'bg-[#007AFF] text-white' : 'bg-[#F2F2F7] text-[#3C3C43]'}`}
+                  >
+                    <UsersIcon size={14} /> Tutti
+                  </button>
+                  <button
+                    onClick={() => setBroadcastTarget('single')}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${broadcastTarget === 'single' ? 'bg-[#007AFF] text-white' : 'bg-[#F2F2F7] text-[#3C3C43]'}`}
+                  >
+                    👤 Singolo
+                  </button>
+                </div>
+              </div>
+
+              {/* Selezione dipendente */}
+              {broadcastTarget === 'single' && (
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] outline-none text-sm"
+                  value={broadcastUserId}
+                  onChange={(e) => setBroadcastUserId(e.target.value)}
+                >
+                  <option value="">— Seleziona dipendente —</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <Input
-                placeholder="Titolo (es. Attenzione!)"
+                placeholder="Titolo (es. 🍕 Ordina la pizza!)"
                 value={broadcastTitle}
                 onChange={(e) => setBroadcastTitle(e.target.value)}
               />
@@ -219,13 +266,13 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
                 onChange={(e) => setBroadcastBody(e.target.value)}
               />
               <Button fullWidth loading={sendingAll} onClick={handleBroadcast}>
-                🚀 Invia a tutti ora
+                🚀 {broadcastTarget === 'single' ? 'Invia al dipendente' : 'Invia a tutti'}
               </Button>
             </div>
           )}
         </Card>
 
-        {/* SEZIONE MESSAGGI SCHEDULATI */}
+        {/* MESSAGGI SCHEDULATI */}
         <div className="flex items-center justify-between">
           <p className="font-semibold text-[#1c1c1e]">⏰ Messaggi schedulati</p>
           <Button size="sm" onClick={() => setShowForm(!showForm)} variant={showForm ? 'secondary' : 'primary'}>
@@ -234,17 +281,15 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
           </Button>
         </div>
 
-        {/* FORM NUOVO MESSAGGIO */}
+        {/* FORM NUOVO */}
         {showForm && (
           <Card className="p-4 space-y-4">
             <p className="font-medium text-[#1c1c1e] text-sm">Nuovo messaggio schedulato</p>
-
             <Input
               placeholder="Titolo (es. 🍕 Ordina la pizza!)"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
-
             <textarea
               className="w-full px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] outline-none transition-all text-sm resize-none"
               rows={3}
@@ -252,8 +297,6 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
               value={form.body}
               onChange={(e) => setForm({ ...form, body: e.target.value })}
             />
-
-            {/* Selezione giorni */}
             <div>
               <p className="text-xs text-[#8E8E93] mb-2 font-medium">Giorni di invio</p>
               <div className="flex gap-2 flex-wrap">
@@ -261,22 +304,16 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
                   <button
                     key={d.value}
                     onClick={() => toggleDay(d.value)}
-                    className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-all ${
-                      form.days_of_week.includes(d.value)
-                        ? 'bg-[#007AFF] text-white'
-                        : 'bg-[#F2F2F7] text-[#3C3C43]'
-                    }`}
+                    className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-all ${form.days_of_week.includes(d.value) ? 'bg-[#007AFF] text-white' : 'bg-[#F2F2F7] text-[#3C3C43]'}`}
                   >
                     {d.label}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Orario */}
             <div>
               <p className="text-xs text-[#8E8E93] mb-2 font-medium">Orario di invio</p>
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="text-xs text-[#8E8E93]">Ora</label>
                   <select
@@ -303,15 +340,13 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
                 </div>
               </div>
             </div>
-
             <Button fullWidth loading={saving} onClick={handleSave}>
-              <Check size={16} />
-              Salva messaggio
+              <Check size={16} /> Salva messaggio
             </Button>
           </Card>
         )}
 
-        {/* LISTA MESSAGGI SCHEDULATI */}
+        {/* LISTA */}
         {loading ? (
           <div className="flex justify-center py-8">
             <RefreshCw size={24} className="animate-spin text-[#8E8E93]" />
@@ -330,7 +365,7 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-[#1c1c1e] text-sm truncate">{n.title}</p>
                     <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2">{n.body}</p>
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className="text-xs bg-[#F2F2F7] text-[#3C3C43] px-2 py-0.5 rounded-lg font-medium">
                         📅 {formatDays(n.days_of_week)}
                       </span>
@@ -339,37 +374,18 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
                       </span>
                     </div>
                   </div>
-
-                  <div className="flex flex-col gap-2 shrink-0">
-                    {/* Toggle attivo/inattivo */}
-                    <button
-                      onClick={() => handleToggleActive(n)}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
-                        n.active ? 'bg-[#34C759]/10 text-[#34C759]' : 'bg-[#F2F2F7] text-[#8E8E93]'
-                      }`}
-                    >
-                      {n.active ? 'Attivo' : 'Inattivo'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Azioni */}
-                <div className="flex gap-2 mt-3 pt-3 border-t border-[#F2F2F7]">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={sending === n.id}
-                    onClick={() => handleSendNow(n)}
-                    className="flex-1"
+                  <button
+                    onClick={() => handleToggleActive(n)}
+                    className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 ${n.active ? 'bg-[#34C759]/10 text-[#34C759]' : 'bg-[#F2F2F7] text-[#8E8E93]'}`}
                   >
+                    {n.active ? 'Attivo' : 'Inattivo'}
+                  </button>
+                </div>
+                <div className="flex gap-2 mt-3 pt-3 border-t border-[#F2F2F7]">
+                  <Button size="sm" variant="secondary" loading={sending === n.id} onClick={() => handleSendNow(n)} className="flex-1">
                     🚀 Invia ora
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => handleDelete(n.id)}
-                    className="px-3"
-                  >
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(n.id)} className="px-3">
                     <Trash2 size={14} />
                   </Button>
                 </div>
@@ -378,10 +394,9 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* INFO CRON */}
         <Card className="p-4 bg-[#F2F2F7]">
           <p className="text-xs text-[#8E8E93] leading-relaxed">
-            ℹ️ I messaggi schedulati vengono inviati automaticamente dal server ogni martedì e giovedì alle 9:00. Gli orari personalizzati qui sopra sono salvati per riferimento — per attivarli contatta lo sviluppatore.
+            ℹ️ Il cron automatico gira ogni martedì e giovedì alle 9:00 e invia il primo messaggio schedulato attivo a tutti i dipendenti.
           </p>
         </Card>
 
