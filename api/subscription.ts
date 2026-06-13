@@ -11,6 +11,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  console.log('ENV CHECK:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseKey,
+    urlStart: supabaseUrl?.substring(0, 20),
+    keyStart: supabaseKey?.substring(0, 10),
+    allKeys: Object.keys(process.env).filter(k => k.includes('SUPA') || k.includes('VAPID'))
+  });
+
   if (!supabaseUrl || !supabaseKey) {
     console.error('Variabili ambiente mancanti:', { supabaseUrl: !!supabaseUrl, supabaseKey: !!supabaseKey });
     return res.status(500).json({ error: 'Configurazione server mancante' });
