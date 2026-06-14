@@ -20,9 +20,11 @@ import {
   Flag,
   History,
   Star,
-  RefreshCw
+  RefreshCw,
+  Bell
 } from '../components/Icons';
 import { getDayAvailability, getTodayDateString } from '../services/utils';
+import MessagesBoard from './MessagesBoard';
 import { SLOT_TIMES } from '../constants';
 
 interface WorkerDashboardProps {
@@ -31,7 +33,7 @@ interface WorkerDashboardProps {
   onBackToAdmin?: () => void;
 }
 
-type ViewState = 'menu' | 'history' | 'settings';
+type ViewState = 'menu' | 'history' | 'settings' | 'messages';
 
 const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBackToAdmin }) => {
   const { t, isRtl, language } = useTranslation();
@@ -430,7 +432,7 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
   const isManagement = user.role === Role.ADMIN || user.role === Role.SUPERVISOR;
 
   return (
-    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : activeTab === 'history' ? t('historyTitle') : t('profileTitle')} onBack={activeTab !== 'menu' ? () => setActiveTab('menu') : undefined}>
+    <Layout title={activeTab === 'menu' ? 'InTavola Staff' : activeTab === 'history' ? t('historyTitle') : activeTab === 'messages' ? 'Messaggi' : t('profileTitle')} onBack={activeTab !== 'menu' ? () => setActiveTab('menu') : undefined}>
       {showSuccess && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-white/95 backdrop-blur-2xl animate-in fade-in duration-300">
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-500 shadow-md"><Check size={32} strokeWidth={3} /></div>
@@ -451,7 +453,9 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
         </div>
       )}
 
-      {activeTab === 'menu' ? renderMenu() : activeTab === 'history' ? renderHistory() : (
+      {activeTab === 'menu' ? renderMenu() : activeTab === 'history' ? renderHistory() : activeTab === 'messages' ? (
+        <MessagesBoard user={user} onBack={() => setActiveTab('menu')} />
+      ) : (
         <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-right duration-300">
            <Card className="p-6 text-center bg-white shadow-md">
             <div className="w-16 h-16 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white mx-auto shadow-md mb-4"><UserIcon size={32} /></div>
@@ -511,6 +515,11 @@ const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ user, onLogout, onBac
           <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'history' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
             <History size={22} />
             <span className="text-[9px] font-black uppercase tracking-tighter">{t('historyTab')}</span>
+          </button>
+
+          <button onClick={() => setActiveTab('messages')} className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === 'messages' ? 'text-[#007AFF] font-bold' : 'text-[#8E8E93] opacity-60'}`}>
+            <Bell size={22} />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Messaggi</span>
           </button>
 
           {isManagement && onBackToAdmin && (

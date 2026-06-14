@@ -18,7 +18,10 @@ interface ScheduledNotification {
   created_at: string;
 }
 
+import { User } from '../types';
+
 interface AdminNotificationsProps {
+  user: User;
   onBack: () => void;
 }
 
@@ -42,7 +45,7 @@ const EMPTY_FORM = {
   target: 'all',
 };
 
-const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
+const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack }) => {
   const [notifications, setNotifications] = useState<ScheduledNotification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,6 +162,7 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onBack }) => {
         title: broadcastTitle.trim(),
         body: broadcastBody.trim(),
         url: '/',
+        sentBy: user?.id,
       };
       if (broadcastTarget === 'single') body.targetUserId = broadcastUserId;
 

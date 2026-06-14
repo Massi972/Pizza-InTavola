@@ -11,6 +11,7 @@ import AdminModifications from './views/AdminModifications';
 import AdminCalendar from './views/AdminCalendar';
 import AdminFlags from './views/AdminFlags';
 import AdminNotifications from './views/AdminNotifications';
+import MessagesBoard from './views/MessagesBoard';
 import RegisterView from './views/Register';
 import { Button } from './components/UI';
 import { LanguageProvider } from './services/i18n';
@@ -26,7 +27,7 @@ const AppContent: React.FC = () => {
     return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
   });
 
-  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags' | 'notifications'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'pizzas' | 'users' | 'history' | 'modifications' | 'order' | 'calendar' | 'flags' | 'notifications' | 'messages'>('dashboard');
   const [isRegistering, setIsRegistering] = useState(false);
 
   const handleLogout = useCallback(() => {
@@ -93,7 +94,8 @@ const AppContent: React.FC = () => {
         {view === 'modifications' && <AdminModifications onBack={() => setView('dashboard')} />}
         {view === 'calendar' && <AdminCalendar onBack={() => setView('dashboard')} />}
         {view === 'flags' && <AdminFlags onBack={() => setView('dashboard')} />}
-        {view === 'notifications' && <AdminNotifications onBack={() => setView('dashboard')} />}
+        {view === 'notifications' && <AdminNotifications user={auth.user!} onBack={() => setView('dashboard')} />}
+        {view === 'messages' && <MessagesBoard user={auth.user!} onBack={() => setView('dashboard')} />}
         {view === 'order' && <WorkerDashboard user={auth.user} onLogout={handleLogout} onBackToAdmin={() => setView('dashboard')} />}
         {view === 'dashboard' && auth.user.role !== Role.WORKER && (
           <AdminDashboard 
