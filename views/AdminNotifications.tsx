@@ -17,8 +17,6 @@ interface ScheduledNotification {
   created_at: string;
 }
 
-import { User } from '../types';
-
 interface AdminNotificationsProps {
   user: User;
   onBack: () => void;
