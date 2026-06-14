@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Button, Card, Input } from '../components/UI';
 import { Plus, Trash2, Bell, Check, AlertCircle, RefreshCw, UsersIcon } from '../components/Icons';
-import { supabase } from '../services/db';
+import { supabase, db } from '../services/db';
 import { User } from '../types';
-import { db } from '../services/db';
 
 interface ScheduledNotification {
   id: string;
