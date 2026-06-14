@@ -159,7 +159,6 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
         title: broadcastTitle.trim(),
         body: broadcastBody.trim(),
         url: '/',
-        sentBy: user?.id,
       };
       if (broadcastTarget === 'single') body.targetUserId = broadcastUserId;
 

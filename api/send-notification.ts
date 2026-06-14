@@ -10,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo non consentito' });
 
-  // Inizializza tutto dentro l'handler
   const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -22,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.VAPID_PRIVATE_KEY!
   );
 
-  const { title, body, url, targetUserId, sentBy } = req.body;
+  const { title, body, url, targetUserId } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'Titolo e testo obbligatori' });
 
   let query = supabase.from('push_subscriptions').select('*');
@@ -37,17 +36,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = JSON.stringify({ title, body, url: url || '/' });
   const results = { sent: 0, failed: 0, removed: 0 };
 
-  // Salva il messaggio nella bacheca
-  await supabase.from('messages').insert([{ title, body, sent_by: sentBy || null }]);
-
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {
         await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload
         );
         results.sent++;
