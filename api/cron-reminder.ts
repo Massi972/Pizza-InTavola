@@ -1,46 +1,95 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+import webpush from 'web-push';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Vercel invoca il cron con l'header Authorization automaticamente
-  // ma aggiungiamo anche il controllo del metodo
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo non consentito' });
   }
 
-  // Controlla che sia martedì (2) o giovedì (4) — ora italiana (UTC+2)
+  // Ora italiana (UTC+2 CEST / UTC+1 CET)
   const now = new Date();
-  const italyOffset = 2 * 60; // UTC+2 (CEST)
+  const italyOffset = 2 * 60;
   const italyTime = new Date(now.getTime() + italyOffset * 60 * 1000);
-  const dayOfWeek = italyTime.getUTCDay(); // 0=Dom, 1=Lun, 2=Mar, 3=Mer, 4=Gio
+  const dayOfWeek = italyTime.getUTCDay();   // 0=Dom ... 6=Sab
+  const currentHour = italyTime.getUTCHours();
+  const currentMinute = italyTime.getUTCMinutes();
 
-  if (dayOfWeek !== 2 && dayOfWeek !== 4) {
-    console.log(`Cron eseguito ma oggi non è martedì/giovedì (giorno: ${dayOfWeek}). Skip.`);
-    return res.status(200).json({ skipped: true, day: dayOfWeek });
+  console.log(`Cron eseguito: giorno=${dayOfWeek}, ora=${currentHour}:${String(currentMinute).padStart(2,'0')}`);
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT!,
+    process.env.VITE_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+
+  // Legge messaggi schedulati attivi per questo giorno e ora
+  const { data: messages, error } = await supabase
+    .from('scheduled_notifications')
+    .select('*')
+    .eq('active', true)
+    .eq('hour', currentHour)
+    .lte('minute', currentMinute + 4)  // tolleranza 5 minuti per il cron
+    .gte('minute', Math.max(0, currentMinute - 4));
+
+  if (error) {
+    console.error('Errore lettura scheduled_notifications:', error);
+    return res.status(500).json({ error: error.message });
   }
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'https://pizza-in-tavola.vercel.app'; // fallback con il tuo dominio
+  // Filtra per giorno della settimana (days_of_week è un array)
+  const toSend = (messages || []).filter(m =>
+    Array.isArray(m.days_of_week) && m.days_of_week.includes(dayOfWeek)
+  );
 
-  try {
-    const response = await fetch(`${baseUrl}/api/send-notification`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
-      },
-      body: JSON.stringify({
-        title: '🍕 Ordina la pizza!',
-        body: 'Ricordati di ordinare la tua pizza per oggi. Apri l\'app e fai il tuo ordine!',
-        url: '/',
-      }),
-    });
-
-    const result = await response.json();
-    console.log('Reminder inviato:', result);
-    return res.status(200).json({ success: true, ...result });
-  } catch (err: any) {
-    console.error('Errore cron reminder:', err);
-    return res.status(500).json({ error: err.message });
+  if (toSend.length === 0) {
+    console.log('Nessun messaggio da inviare per questo giorno/ora.');
+    return res.status(200).json({ skipped: true, day: dayOfWeek, hour: currentHour, minute: currentMinute });
   }
+
+  const results: any[] = [];
+
+  for (const msg of toSend) {
+    // Recupera subscription per target
+    let query = supabase.from('push_subscriptions').select('*');
+    if (msg.target && msg.target !== 'all') {
+      query = query.eq('user_id', msg.target);
+    }
+    const { data: subscriptions } = await query;
+    if (!subscriptions || subscriptions.length === 0) {
+      results.push({ id: msg.id, title: msg.title, sent: 0, message: 'Nessuna subscription' });
+      continue;
+    }
+
+    const payload = JSON.stringify({ title: msg.title, body: msg.body, url: '/' });
+    let sent = 0, failed = 0, removed = 0;
+
+    await Promise.all(subscriptions.map(async (sub: any) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload
+        );
+        sent++;
+      } catch (err: any) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+          removed++;
+        } else {
+          console.error('Errore push:', err.statusCode, err.message);
+          failed++;
+        }
+      }
+    }));
+
+    results.push({ id: msg.id, title: msg.title, sent, failed, removed });
+  }
+
+  console.log('Risultati cron:', results);
+  return res.status(200).json({ success: true, processed: results.length, results });
 }
