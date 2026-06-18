@@ -40,6 +40,7 @@ const EMPTY_FORM = {
   minute: 0,
   active: true,
   target: 'all',
+  targetUserId: '',
 };
 
 const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack }) => {
@@ -99,6 +100,11 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
       return;
     }
     setSaving(true);
+    if (form.target === 'single' && !form.targetUserId) {
+      showToast('Seleziona un dipendente', false);
+      setSaving(false);
+      return;
+    }
     const { error } = await supabase.from('scheduled_notifications').insert([{
       title: form.title.trim(),
       body: form.body.trim(),
@@ -106,7 +112,7 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
       hour: form.hour,
       minute: form.minute,
       active: true,
-      target: 'all',
+      target: form.target === 'single' ? form.targetUserId : 'all',
     }]);
     setSaving(false);
     if (error) { showToast('Errore nel salvataggio', false); return; }
@@ -131,10 +137,12 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
   const handleSendNow = async (n: ScheduledNotification) => {
     setSending(n.id);
     try {
+      const sendBody: any = { title: n.title, body: n.body, url: '/' };
+      if (n.target && n.target !== 'all') sendBody.targetUserId = n.target;
       const res = await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: n.title, body: n.body, url: '/' }),
+        body: JSON.stringify(sendBody),
       });
       const result = await res.json();
       showToast(`Inviato a ${result.sent ?? 0} dispositivi!`);
@@ -285,6 +293,36 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
         {showForm && (
           <Card className="p-4 space-y-4">
             <p className="font-medium text-[#1c1c1e] text-sm">Nuovo messaggio schedulato</p>
+            {/* Destinatario */}
+            <div>
+              <p className="text-xs text-[#8E8E93] mb-2 font-medium">Destinatario</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setForm({ ...form, target: 'all', targetUserId: '' })}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${form.target === 'all' ? 'bg-[#007AFF] text-white' : 'bg-[#F2F2F7] text-[#3C3C43]'}`}
+                >
+                  <UsersIcon size={14} /> Tutti
+                </button>
+                <button
+                  onClick={() => setForm({ ...form, target: 'single' })}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${form.target === 'single' ? 'bg-[#007AFF] text-white' : 'bg-[#F2F2F7] text-[#3C3C43]'}`}
+                >
+                  👤 Singolo
+                </button>
+              </div>
+              {form.target === 'single' && (
+                <select
+                  className="w-full mt-2 px-4 py-3 rounded-xl bg-white border border-[#C6C6C8] outline-none text-sm"
+                  value={form.targetUserId}
+                  onChange={(e) => setForm({ ...form, targetUserId: e.target.value })}
+                >
+                  <option value="">— Seleziona dipendente —</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <Input
               placeholder="Titolo (es. 🍕 Ordina la pizza!)"
               value={form.title}
@@ -371,6 +409,9 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ user, onBack })
                       </span>
                       <span className="text-xs bg-[#F2F2F7] text-[#3C3C43] px-2 py-0.5 rounded-lg font-medium">
                         🕐 {formatTime(n.hour, n.minute)}
+                      </span>
+                      <span className="text-xs bg-[#F2F2F7] text-[#3C3C43] px-2 py-0.5 rounded-lg font-medium">
+                        {n.target === 'all' ? '👥 Tutti' : '👤 ' + (users.find(u => u.id === n.target)?.firstName ?? 'Singolo')}
                       </span>
                     </div>
                   </div>
