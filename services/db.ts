@@ -436,9 +436,22 @@ class DB {
   }
 
   async getAllOrders(): Promise<Order[]> {
-    const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return (data || []).map(o => ({ 
+    // Supabase/PostgREST tronca a 1000 righe per richiesta: scarichiamo a blocchi
+    // finché il DB continua a restituire pagine piene.
+    const PAGE_SIZE = 1000;
+    const data: any[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) return [];
+      if (!page || page.length === 0) break;
+      data.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    return (data || []).map(o => ({
       id: o.id, dayId: o.day_id, userId: o.user_id, pizzaId: o.pizza_id, slotTime: o.slot_time as SlotTime,
       addModificationIds: Array.isArray(o.add_modification_ids) ? o.add_modification_ids : [],
       removeModificationIds: Array.isArray(o.remove_modification_ids) ? o.remove_modification_ids : [],

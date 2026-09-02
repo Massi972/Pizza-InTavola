@@ -110,7 +110,8 @@ const AdminHistory: React.FC<AdminHistoryProps> = ({ onBack }) => {
 
     const ordersWithDates = allOrders.map(o => {
       const day = days.find(d => d.id === o.dayId);
-      return { ...o, date: day ? new Date(day.date) : null };
+      // Mezzogiorno per evitare che il fuso sposti la data di un giorno (e quindi di mese)
+      return { ...o, date: day ? new Date(day.date + 'T12:00:00') : null };
     });
 
     const monthOrders = ordersWithDates.filter(o => o.date && o.date.getMonth() === currentMonth && o.date.getFullYear() === currentYear);
